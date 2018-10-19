@@ -6,6 +6,7 @@ in milliseconds of the virtual machine tick is specified by the tickms parameter
 */
 TVMStatus VMStart(int tickms, int argc, char *argv[]){
 
+    return 0;
 };
 /*!
 Upon successful loading and running of the VMMain() function, VMStart() will return
@@ -119,6 +120,7 @@ When a thread calls VMFileWrite() it blocks in the wait state VM_THREAD_STATE_WA
 */
 TVMStatus VMFileWrite(int filedescriptor, void *data, int *length){
 
+    return 0;
 };
 
 /*
