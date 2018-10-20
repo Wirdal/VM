@@ -1,23 +1,10 @@
 #include <VirtualMachine.h>
-<<<<<<< HEAD
 #include <Machine.h>
 
 extern "C" {
   TVMMainEntry VMLoadModule(const char *module);
 }
 
-=======
-
-//Define Thread Control Block (TCB)
-
-//function prototypes to use functions from VirtualMachineUtils.c
-
-extern "C"{
-// Prototype here
-}
-
-
->>>>>>> 21c147e901dfcdc413823e450cfc703c631d32f5
 /*!
 VMStart() starts the virtual machine by loading the module specified by argv [0]. The argc and argv
 are passed directly into the VMMain() function that exists in the loaded module. The time
@@ -115,7 +102,7 @@ The filedescriptor returned can be used in subsequent calls to VMFileClose(), VM
 When a thread calls VMFileOpen() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful opening of the file is completed.
 */
 TVMStatus VMFileOpen(const char *filename, int flags, int mode, int *filedescriptor){
-//MachineFileOpen from Machine.cpp probably used
+
 };
 
 /*
@@ -154,5 +141,5 @@ TVMStatus VMFileSeek(int filedescriptor, int offset, int whence, int *newoffset)
 
 };
 
-//#define VMPrint(format, ...)        VMFilePrint ( 1,  format, ##__VA_ARGS__)
-//#define VMPrintError(format, ...)   VMFilePrint ( 2,  format, ##__VA_ARGS__)
+#define VMPrint(format, ...)        VMFilePrint ( 1,  format, ##__VA_ARGS__)
+#define VMPrintError(format, ...)   VMFilePrint ( 2,  format, ##__VA_ARGS__)

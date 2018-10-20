@@ -53,7 +53,7 @@ typedef struct{
     uint8_t DPayload[1];
 } SMachineRequest, *SMachineRequestRef;
 
-typedef struct{In computer programming, programming languages are often colloq
+typedef struct{
     uint32_t DRequestID;
     int DFileDescriptor;
     int DLength;
@@ -84,26 +84,26 @@ void MachineContextCreate(SMachineContextRef mcntxref, void (*entry)(void *), vo
     stack_t OldSigStack;
     sigset_t OldSigSet;
     sigset_t SigSet;
-    
-    // Step 1: 
+
+    // Step 1:
     sigemptyset(&SigSet);
     sigaddset(&SigSet, SIGUSR1);
     sigprocmask(SIG_BLOCK, &SigSet, &OldSigSet);
-    
-    // Step 2: 
+
+    // Step 2:
     memset((void *)&SigAction, 0, sizeof(struct sigaction));
     SigAction.sa_handler = MachineContextCreateTrampoline;
     SigAction.sa_flags = SA_ONSTACK;
     sigemptyset(&SigAction.sa_mask);
     sigaction(SIGUSR1, &SigAction, &OldSigAction);
-    
-    // Step 3: 
+
+    // Step 3:
     SigStack.ss_sp = stackaddr;
     SigStack.ss_size = stacksize;
     SigStack.ss_flags = 0;
     sigaltstack(&SigStack, &OldSigStack);
-    
-    // Step 4: 
+
+    // Step 4:
     MachineContextCreateRef = mcntxref;
     MachineContextCreateFunction = entry;
     MachineContextCreateParam = param;
@@ -115,8 +115,8 @@ void MachineContextCreate(SMachineContextRef mcntxref, void (*entry)(void *), vo
     while (!MachineContextCalled){
         sigsuspend(&SigSet);
     }
-    
-    // Step 6: 
+
+    // Step 6:
     sigaltstack(NULL, &SigStack);
     SigStack.ss_flags = SS_DISABLE;
     sigaltstack(&SigStack, NULL);
@@ -125,43 +125,43 @@ void MachineContextCreate(SMachineContextRef mcntxref, void (*entry)(void *), vo
     }
     sigaction(SIGUSR1, &OldSigAction, NULL);
     sigprocmask(SIG_SETMASK, &OldSigSet, NULL);
-    
-    // Step 7 & Step 8: 
+
+    // Step 7 & Step 8:
     MachineContextSwitch(&MachineContextCaller, mcntxref);
-    
-    // Step 14: 
+
+    // Step 14:
     return;
 }
 
 void MachineContextCreateTrampoline(int sig){
-    // Step 5: 
+    // Step 5:
     if(MachineContextSave(MachineContextCreateRef) == 0){
         MachineContextCalled = true;
         return;
     }
-    
-    // Step 9: 
+
+    // Step 9:
     MachineContextCreateBoot();
 }
 
 void MachineContextCreateBoot(void){
     void (*MachineContextStartFunction)(void *);
     void *MachineContextStartParam;
-    
-    // Step 10: 
+
+    // Step 10:
     sigprocmask(SIG_SETMASK, &MachineContextCreateSignals, NULL);
-    
-    // Step 11: 
+
+    // Step 11:
     MachineContextStartFunction = MachineContextCreateFunction;
     MachineContextStartParam = MachineContextCreateParam;
-    
-    // Step 12 & Step 13: 
+
+    // Step 12 & Step 13:
     MachineContextSwitch(MachineContextCreateRef, &MachineContextCaller);
-    
-    // The thread "magically" starts... 
+
+    // The thread "magically" starts...
     MachineContextStartFunction(MachineContextStartParam);
-    
-    // NOTREACHED 
+
+    // NOTREACHED
     abort();
 }
 
@@ -198,7 +198,7 @@ void MachineReplySignalHandler(int signum){
                 int ReturnValue = MachineGetInt(MessageRef->DPayload);
                 MachinePendingCallbacks.erase(MessageRef->DRequestID);
                 if(MACHINE_REQUEST_READ == MessageRef->DType){
-                    // Copy the data   
+                    // Copy the data
                     if(0 < ReturnValue){
                         memcpy(Callinfo.DDestination, MessageRef->DPayload + sizeof(int), ReturnValue);
                     }
@@ -207,17 +207,17 @@ void MachineReplySignalHandler(int signum){
             }
         }
     }while(0 < MessageSize);
-    
-    
+
+
 }
 
 uint32_t MachineAddRequest(TMachineFileCallback callback, void *calldata, void *dest){
     SMachinePendingCallback Callback;
-    
+
     Callback.DCallback = callback;
     Callback.DCalldata = calldata;
     Callback.DDestination = dest;
-    
+
     MachineRequestID++;
     MachinePendingCallbacks[(uint32_t)MachineRequestID] = Callback;
     return MachineRequestID;
@@ -231,11 +231,11 @@ void MachineSendReply(SMachineRequestRef mess, int length){
 void MachineInitialize(void){
     TMachineSignalState SigStateSave;
     struct sigaction OldSigAction, SigAction;
-    
+
     if(MachineInitialized){
         return;
     }
-    
+
     sigaction(SIGALRM, NULL, &MachineAlarmActionSave);
     MachineData.DParentPID = getpid();
     MachineData.DRequestChannel = msgget(IPC_PRIVATE, IPC_CREAT | 0666);
@@ -248,9 +248,9 @@ void MachineInitialize(void){
         fprintf(stderr,"Failed to create message queue: %s\n", strerror(errno));
         exit(1);
     }
-    
+
     MachineSuspendSignals(&SigStateSave);
-    
+
     MachineData.DChildPID = fork();
     if(0 == MachineData.DChildPID){
         bool Terminated = false;
@@ -262,7 +262,7 @@ void MachineInitialize(void){
         sigset_t SigMask;
         int Result, FileDescriptor, Length, Flags, Mode;
         int Offset, Whence;
-        
+
         MachineData.DChildPID = getpid();
         pipe(MachineSignalPipe);
         PollFDs.resize(1);
@@ -273,7 +273,7 @@ void MachineInitialize(void){
         SigAction.sa_handler = MachineRequestSignalHandler;
         sigemptyset(&SigAction.sa_mask);
         sigaction(SIGUSR2, &SigAction, &OldSigAction);
-        
+
         MachineEnableSignals();
         while(!Terminated){
             sigemptyset(&SigMask);
@@ -284,7 +284,7 @@ void MachineInitialize(void){
                 SMachinePendingRead PendingRead;
                 bool Found;
                 uint8_t TempByte;
-                
+
                 read(PollFDs[0].fd, &TempByte, 1);
                 while(true){
                     MessageSize = msgrcv(MachineData.DRequestChannel, MessageRef, sizeof(Buffer), 0, IPC_NOWAIT);
@@ -309,7 +309,7 @@ void MachineInitialize(void){
                                                                 }
                                                                 if(!Found){
                                                                     struct pollfd NewReadFD;
-                                                                    
+
                                                                     NewReadFD.fd = PendingRead.DFileDescriptor;
                                                                     NewReadFD.events = POLLIN;
                                                                     NewReadFD.revents = 0;
@@ -401,11 +401,11 @@ void MachineTerminate(void){
         uint8_t Buffer[MACHINE_MAX_MESSAGE_SIZE];
         SMachineRequestRef MessageRef = (SMachineRequestRef)Buffer;
         int Status;
-        
+
         MachineSuspendSignals(&SignalState);
-        
+
         sigaction(SIGALRM, &MachineAlarmActionSave, NULL);
-        
+
         MessageRef->DType = MACHINE_REQUEST_TERMINATE;
         ualarm(0,0);
         MessageRef->DRequestID = MachineAddRequest(NULL, NULL, NULL);
@@ -414,13 +414,13 @@ void MachineTerminate(void){
         wait(&Status);
         MachineResumeSignals(&SignalState);
     }
-    
+
 }
 
 void MachineEnableSignals(void){
     sigset_t NewSigset, OldSigset;
     sigfillset(&NewSigset);
-    sigprocmask(SIG_UNBLOCK, &NewSigset, &OldSigset);    
+    sigprocmask(SIG_UNBLOCK, &NewSigset, &OldSigset);
 }
 
 void MachineSuspendSignals(TMachineSignalStateRef sigstate){
@@ -437,22 +437,22 @@ void MachineResumeSignals(TMachineSignalStateRef sigstate){
 
 void MachineAlarmSignalHandler(int signum){
     if(MachineAlarmCallback){
-        MachineAlarmCallback(MachineAlarmCalldata); 
+        MachineAlarmCallback(MachineAlarmCalldata);
     }
 }
 
 void MachineRequestAlarm(useconds_t usec, TMachineAlarmCallback callback, void *calldata){
     if(MachineInitialized){
         struct sigaction NewAction;
-        
+
         memset((void *)&NewAction, 0, sizeof(struct sigaction));
         NewAction.sa_handler = MachineAlarmSignalHandler;
         sigfillset(&NewAction.sa_mask);
         sigdelset(&NewAction.sa_mask, SIGALRM);
         NewAction.sa_flags = SA_NODEFER;
-    
+
         MachineAlarmCallback = callback;
-        MachineAlarmCalldata = calldata;      
+        MachineAlarmCalldata = calldata;
         sigaction(SIGALRM, &NewAction, &MachineAlarmActionSave);
         ualarm(usec * 2, usec);
     }
@@ -463,12 +463,12 @@ void MachineFileOpen(const char *filename, int flags, int mode, TMachineFileCall
         TMachineSignalState SignalState;
         uint8_t Buffer[MACHINE_MAX_MESSAGE_SIZE];
         SMachineRequestRef MessageRef = (SMachineRequestRef)Buffer;
-        
+
         MessageRef->DType = MACHINE_REQUEST_OPEN;
         strcpy((char *)MessageRef->DPayload, filename);
         MachineSetInt(MessageRef->DPayload + strlen(filename) + 1, flags);
         MachineSetInt(MessageRef->DPayload + strlen(filename) + sizeof(int) + 1, mode);
-        
+
         MachineSuspendSignals(&SignalState);
         MessageRef->DRequestID = MachineAddRequest(callback, calldata, NULL);
         msgsnd(MachineData.DRequestChannel, MessageRef, sizeof(SMachineRequest) + strlen(filename) + sizeof(int), 0);
@@ -482,11 +482,11 @@ void MachineFileRead(int fd, void *data, int length, TMachineFileCallback callba
         TMachineSignalState SignalState;
         uint8_t Buffer[MACHINE_MAX_MESSAGE_SIZE];
         SMachineRequestRef MessageRef = (SMachineRequestRef)Buffer;
-        
+
         MessageRef->DType = MACHINE_REQUEST_READ;
         MachineSetInt(MessageRef->DPayload, fd);
         MachineSetInt(MessageRef->DPayload + sizeof(int), length);
-        
+
         MachineSuspendSignals(&SignalState);
         MessageRef->DRequestID = MachineAddRequest(callback, calldata, data);
         msgsnd(MachineData.DRequestChannel, MessageRef, sizeof(SMachineRequest) + 2 * sizeof(int) - 1, 0);
@@ -500,12 +500,12 @@ void MachineFileWrite(int fd, void *data, int length, TMachineFileCallback callb
         TMachineSignalState SignalState;
         uint8_t Buffer[MACHINE_MAX_MESSAGE_SIZE];
         SMachineRequestRef MessageRef = (SMachineRequestRef)Buffer;
-        
+
         MessageRef->DType = MACHINE_REQUEST_WRITE;
         MachineSetInt(MessageRef->DPayload, fd);
         MachineSetInt(MessageRef->DPayload + sizeof(int), length);
         memcpy(MessageRef->DPayload + sizeof(int) * 2, data, length);
-        
+
         MachineSuspendSignals(&SignalState);
         MessageRef->DRequestID = MachineAddRequest(callback, calldata, NULL);
         msgsnd(MachineData.DRequestChannel, MessageRef, sizeof(SMachineRequest) + 2 * sizeof(int) + length - 1, 0);
@@ -519,12 +519,12 @@ void MachineFileSeek(int fd, int offset, int whence, TMachineFileCallback callba
         TMachineSignalState SignalState;
         uint8_t Buffer[MACHINE_MAX_MESSAGE_SIZE];
         SMachineRequestRef MessageRef = (SMachineRequestRef)Buffer;
-        
+
         MessageRef->DType = MACHINE_REQUEST_SEEK;
         MachineSetInt(MessageRef->DPayload, fd);
         MachineSetInt(MessageRef->DPayload + sizeof(int), offset);
         MachineSetInt(MessageRef->DPayload + sizeof(int) * 2, whence);
-        
+
         MachineSuspendSignals(&SignalState);
         MessageRef->DRequestID = MachineAddRequest(callback, calldata, NULL);
         msgsnd(MachineData.DRequestChannel, MessageRef, sizeof(SMachineRequest) + 3 * sizeof(int) - 1, 0);
@@ -538,10 +538,10 @@ void MachineFileClose(int fd, TMachineFileCallback callback, void *calldata){
         TMachineSignalState SignalState;
         uint8_t Buffer[MACHINE_MAX_MESSAGE_SIZE];
         SMachineRequestRef MessageRef = (SMachineRequestRef)Buffer;
-        
+
         MessageRef->DType = MACHINE_REQUEST_CLOSE;
         MachineSetInt(MessageRef->DPayload, fd);
-        
+
         MachineSuspendSignals(&SignalState);
         MessageRef->DRequestID = MachineAddRequest(callback, calldata, NULL);
         msgsnd(MachineData.DRequestChannel, MessageRef, sizeof(SMachineRequest) + sizeof(int) - 1, 0);
