@@ -1,8 +1,11 @@
 #include <VirtualMachine.h>
 #include <Machine.h>
+#include <iostream>
 
 extern "C" {
   TVMMainEntry VMLoadModule(const char *module);
+  void VMUnloadModule(void);
+  TVMStatus VMFilePrint(int filedescriptor, const char *format, ...);
 }
 
 /*!
@@ -13,7 +16,8 @@ in milliseconds of the virtual machine tick is specified by the tickms parameter
 TVMStatus VMStart(int tickms, int argc, char *argv[]){
     MachineInitialize();
     TVMMainEntry entry = VMLoadModule(argv[0]);
-    return 0;
+    VMPrint("Test");
+    return VM_STATUS_SUCCESS;
 };
 
 /*!
@@ -66,7 +70,7 @@ TVMStatus VMThreadActivate(TVMThreadID thread){
 /*
 VMThreadTerminate()terminates the thread specified by threadparameter in the virtual machine.
 After termination the thread entersthe state VM_THREAD_STATE_DEAD.
-The termination of a thread can trigger another thread to be scheduled.
+The termination of a thread can triMachineFileWritegger another thread to be scheduled.
 */
 TVMStatus VMThreadTerminate(TVMThreadID thread){
 
@@ -95,14 +99,14 @@ TVMStatus VMThreadSleep(TVMTick tick){
 };
 
 /*
-MFileOpen()attempts to open the file specified by filename, using the flags specified by flagsparameter, and mode specified by modeparameter.
+VMFileOpen()attempts to open the file specified by filename, using the flags specified by flagsparameter, and mode specified by modeparameter.
 The file descriptor of the newly opened file will be placed in the location specified by filedescriptor.
 The flags and mode values follow the same format as that of open system call.
 The filedescriptor returned can be used in subsequent calls to VMFileClose(), VMFileRead(), VMFileWrite(), and VMFileSeek().
 When a thread calls VMFileOpen() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful opening of the file is completed.
 */
 TVMStatus VMFileOpen(const char *filename, int flags, int mode, int *filedescriptor){
-
+  MachineFileOpen(filename, flags, mode)
 };
 
 /*
@@ -128,8 +132,8 @@ The filedescriptorshould have been obtained by a previous call to VMFileOpen(). 
 When a thread calls VMFileWrite() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful writing of the file is completed.
 */
 TVMStatus VMFileWrite(int filedescriptor, void *data, int *length){
-
-    return 0;
+    //Just a call to other things, really
+    MachineFileWrite(filedescriptor, data, *length);
 };
 
 /*
