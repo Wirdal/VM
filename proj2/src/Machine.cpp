@@ -20,7 +20,6 @@
 #include <map>
 
 extern "C"{
-
 #ifndef NULL
 #define NULL (void *)0
 #endif
@@ -54,7 +53,7 @@ typedef struct{
     uint8_t DPayload[1];
 } SMachineRequest, *SMachineRequestRef;
 
-typedef struct{
+typedef struct{In computer programming, programming languages are often colloq
     uint32_t DRequestID;
     int DFileDescriptor;
     int DLength;
