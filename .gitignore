@@ -2,3 +2,7 @@ obj/*
 bin/*
 obj/
 bin/
+html/
+html/*
+latex/*
+latex/
