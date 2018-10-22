@@ -3,9 +3,9 @@
 #include <iostream>
 
 extern "C" {
-  TVMMainEntry VMLoadModule(const char *module);
-  void VMUnloadModule(void);
-  TVMStatus VMFilePrint(int filedescriptor, const char *format, ...);
+ 	TVMMainEntry VMLoadModule(const char *module);
+	void VMUnloadModule(void);
+	TVMStatus VMFilePrint(int filedescriptor, const char *format, ...);
 }
 
 /*!
@@ -24,6 +24,8 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 		std::cout << "Loaded module \n";
 	}
 	// Just need to pass VMmain its arguements?
+	// Or need to call what is returned
+	entry(argc, argv);
 	return VM_STATUS_SUCCESS;
 };
 

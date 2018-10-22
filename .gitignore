@@ -6,3 +6,4 @@ html/
 html/*
 latex/*
 latex/
+.vscode/
