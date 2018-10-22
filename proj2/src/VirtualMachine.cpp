@@ -2,6 +2,12 @@
 #include <Machine.h>
 #include <iostream>
 
+class TCB {
+	//Local vars
+	//Instruction pointer
+	//??
+};
+
 extern "C" {
  	TVMMainEntry VMLoadModule(const char *module);
 	void VMUnloadModule(void);
@@ -107,10 +113,11 @@ TVMStatus VMThreadSleep(TVMTick tick){
 
 };
 
-void callbackFn(void *calldata, int result){
+void EmptyCallback(void *calldata, int result){
     //calldata - passed into the callback function upon completion of the open file request
     //calldata - received from MachineFileOpen()
     //result - new file descriptor
+	;
 }
 /*
 VMFileOpen()attempts to open the file specified by filename, using the flags specified by flagsparameter, and mode specified by modeparameter.
@@ -161,11 +168,8 @@ TVMStatus VMFileWrite(int filedescriptor, void *data, int *length){
 	//TMachineFileCallback callback;
 	//get filedescriptor from VMFILEOPEN()
 	//void *data;
-	if ((filedescriptor == 1) || (filedescriptor == 2)){
-		// We're writing to std in or std err, don't care about a callback
-		//TMachineFileCallback callback = *callbackFn(data, filedescriptor);
-		MachineFileWrite(filedescriptor, data, *length, callbackFn, data);
-	}
+	//Suspend signals before here? Don't want race conditions
+	MachineFileWrite(filedescriptor, data, *length, EmptyCallback, data);
 
 };
 

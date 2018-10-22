@@ -31,6 +31,7 @@ void MachineContextCreate(SMachineContextRef mcntxref, void (*entry)(void *), vo
 
 typedef void (*TMachineAlarmCallback)(void *calldata);
 typedef void (*TMachineFileCallback)(void *calldata, int result);
+             // Void function pointer, with args of a void pointer and int
 typedef sigset_t TMachineSignalState, *TMachineSignalStateRef;
 void MachineInitialize(void);
 void MachineTerminate(void);
