@@ -16,8 +16,8 @@ are passed directly into the VMMain() function that exists in the loaded module.
 in milliseconds of the virtual machine tick is specified by the tickms parameter.
 */
 TVMStatus VMStart(int tickms, int argc, char *argv[]){
-	MachineInitialize();
 	// Returns Null if fails to load
+        MachineInitialize();
 	TVMMainEntry entry = VMLoadModule(argv[0]);
 	if (entry == NULL) {
 		std::cout << "Failed to load \n";
@@ -27,9 +27,9 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 	}
 	// Just need to pass VMmain its arguements?
 	// Or need to call what is returned
-	entry(argc, argv);
-        VMUnloadModule();
+        entry(argc, argv);
         MachineTerminate();
+        VMUnloadModule();
 	return VM_STATUS_SUCCESS;
 
 };
@@ -157,7 +157,7 @@ When a thread calls VMFileWrite() it blocks in the wait state VM_THREAD_STATE_WA
 
 
 TVMStatus VMFileWrite(int filedescriptor, void *data, int *length){
-        //std::cout << "FileWrite called\n";
+        std::cout << "FileWrite called\n";
 	//Just a call to other things?
         //TMachineFileCallback callback;
         //get filedescriptor from VMFILEOPEN()

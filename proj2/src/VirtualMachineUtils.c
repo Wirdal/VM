@@ -38,8 +38,11 @@ TVMStatus VMFilePrint(int filedescriptor, const char *format, ...){
 
     SizeRequired = vsnprintf(OutputBuffer, SMALL_BUFFER_SIZE, format, ParamList);
     if(SizeRequired < SMALL_BUFFER_SIZE){
+        printf("Pre filewrite VMFilePrint. \n");
         ReturnValue = VMFileWrite(filedescriptor, OutputBuffer, &SizeRequired);
+        printf("Post filewrite VMFilePrint. \n");
         return ReturnValue;
+
     }
     OutputBuffer = (char *)malloc(sizeof(char) *(SizeRequired + 1));
     va_start(ParamList, format);
