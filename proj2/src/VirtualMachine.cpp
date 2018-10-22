@@ -4,7 +4,7 @@
 
 extern "C" {
  	TVMMainEntry VMLoadModule(const char *module);
-        void VMUnloadModule(void);
+	void VMUnloadModule(void);
 	TVMStatus VMFilePrint(int filedescriptor, const char *format, ...);
 }
 
@@ -17,19 +17,20 @@ in milliseconds of the virtual machine tick is specified by the tickms parameter
 */
 TVMStatus VMStart(int tickms, int argc, char *argv[]){
 	// Returns Null if fails to load
-        MachineInitialize();
+	MachineInitialize();
+	MachineEnableSignals();
 	TVMMainEntry entry = VMLoadModule(argv[0]);
 	if (entry == NULL) {
 		std::cout << "Failed to load \n";
 	}
 	else{ 
-                //std::cout << "Loaded module \n";
+		//std::cout << "Loaded module \n";
 	}
 	// Just need to pass VMmain its arguements?
 	// Or need to call what is returned
-        entry(argc, argv);
-        MachineTerminate();
-        VMUnloadModule();
+	entry(argc, argv);
+	MachineTerminate();
+	VMUnloadModule();
 	return VM_STATUS_SUCCESS;
 
 };
@@ -57,7 +58,7 @@ The size of the threads stack is specified by memsize, and the priority is speci
 The thread identifier is put into the location specified by the tidparameter.
 */
 TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
-
+	//Allocate space for thread
 };
 
 /*
@@ -72,7 +73,7 @@ VMThreadActivate()activates the dead thread specified by threadparameter in the 
 After activation the thread enters the ready state VM_THREAD_STATE_READY, and must begin at the entryfunction specified.
 */
 TVMStatus VMThreadActivate(TVMThreadID thread){
-
+	//init context here
 };
 
 /*
@@ -106,11 +107,10 @@ TVMStatus VMThreadSleep(TVMTick tick){
 
 };
 
-TMachineFileCallback callbackFn(void *calldata, int result){
+void callbackFn(void *calldata, int result){
     //calldata - passed into the callback function upon completion of the open file request
     //calldata - received from MachineFileOpen()
     //result - new file descriptor
-    std::cout<<"calldata:" << calldata << " result: " <<result << "\n";
 }
 /*
 VMFileOpen()attempts to open the file specified by filename, using the flags specified by flagsparameter, and mode specified by modeparameter.
@@ -157,18 +157,15 @@ When a thread calls VMFileWrite() it blocks in the wait state VM_THREAD_STATE_WA
 
 
 TVMStatus VMFileWrite(int filedescriptor, void *data, int *length){
-        std::cout << "FileWrite called\n";
 	//Just a call to other things?
-        //TMachineFileCallback callback;
-        //get filedescriptor from VMFILEOPEN()
-        //void *data;
-        std::cout << "FD: " <<filedescriptor << " data: "<< data << " length: " << *length << "\n";
-        if ((filedescriptor == 1) || (filedescriptor == 2)){
-            // We're writing to std in or std err, don't care about a callback
-            TMachineFileCallback callback = *callbackFn(data, filedescriptor);
-            std::cout <<"Calling back \n";
-            MachineFileWrite(filedescriptor, data, *length, callback, data);
-        }
+	//TMachineFileCallback callback;
+	//get filedescriptor from VMFILEOPEN()
+	//void *data;
+	if ((filedescriptor == 1) || (filedescriptor == 2)){
+		// We're writing to std in or std err, don't care about a callback
+		//TMachineFileCallback callback = *callbackFn(data, filedescriptor);
+		MachineFileWrite(filedescriptor, data, *length, callbackFn, data);
+	}
 
 };
 

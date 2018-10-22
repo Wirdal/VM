@@ -211,7 +211,7 @@ void MachineReplySignalHandler(int signum){
 
 }
 
-uint32_t MachineAddRequest(back callback, void *calldata, void *dest){
+uint32_t MachineAddRequest(TMachineFileCallback callback, void *calldata, void *dest){
     SMachinePendingCallback Callback;
 
     Callback.DCallback = callback;
