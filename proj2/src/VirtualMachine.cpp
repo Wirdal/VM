@@ -14,17 +14,18 @@ are passed directly into the VMMain() function that exists in the loaded module.
 in milliseconds of the virtual machine tick is specified by the tickms parameter.
 */
 TVMStatus VMStart(int tickms, int argc, char *argv[]){
-    MachineInitialize();
-    TVMMainEntry entry = VMLoadModule(argv[0]);
-    VMPrint("Test");
-    return VM_STATUS_SUCCESS;
+	MachineInitialize();
+	// Returns Null if fails to load
+	TVMMainEntry entry = VMLoadModule(argv[0]);
+	if (entry == NULL) {
+		std::cout << "Failed to load \n";
+	}
+	else{ 
+		std::cout << "Loaded module \n";
+	}
+	// Just need to pass VMmain its arguements?
+	return VM_STATUS_SUCCESS;
 };
-
-/*!
-Upon successful loading and running of the VMMain() function, VMStart() will return
-VM_STATUS_SUCCESS after VMMain() returns. If the module fails to load,
-or the module does not contain a VMMain() function, VM_STATUS_FAILURE is returned.
-*/
 
 
 /*!
@@ -106,7 +107,6 @@ The filedescriptor returned can be used in subsequent calls to VMFileClose(), VM
 When a thread calls VMFileOpen() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful opening of the file is completed.
 */
 TVMStatus VMFileOpen(const char *filename, int flags, int mode, int *filedescriptor){
-  MachineFileOpen(filename, flags, mode)
 };
 
 /*
@@ -132,8 +132,12 @@ The filedescriptorshould have been obtained by a previous call to VMFileOpen(). 
 When a thread calls VMFileWrite() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful writing of the file is completed.
 */
 TVMStatus VMFileWrite(int filedescriptor, void *data, int *length){
-    //Just a call to other things, really
-    MachineFileWrite(filedescriptor, data, *length);
+	std::cout << "FileWrite called\n";
+	//Just a call to other things?
+	TMachineFileCallback callback;
+
+	MachineFileWrite(filedescriptor, data, *length, *callback, NULL);
+
 };
 
 /*
