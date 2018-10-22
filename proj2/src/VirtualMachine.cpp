@@ -4,9 +4,11 @@
 
 extern "C" {
  	TVMMainEntry VMLoadModule(const char *module);
-	void VMUnloadModule(void);
+        void VMUnloadModule(void);
 	TVMStatus VMFilePrint(int filedescriptor, const char *format, ...);
 }
+
+
 
 /*!
 VMStart() starts the virtual machine by loading the module specified by argv [0]. The argc and argv
@@ -21,12 +23,15 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 		std::cout << "Failed to load \n";
 	}
 	else{ 
-		std::cout << "Loaded module \n";
+                //std::cout << "Loaded module \n";
 	}
 	// Just need to pass VMmain its arguements?
 	// Or need to call what is returned
 	entry(argc, argv);
+        VMUnloadModule();
+        MachineTerminate();
 	return VM_STATUS_SUCCESS;
+
 };
 
 
@@ -101,6 +106,12 @@ TVMStatus VMThreadSleep(TVMTick tick){
 
 };
 
+TMachineFileCallback callbackFn(void *calldata, int result){
+    //calldata - passed into the callback function upon completion of the open file request
+    //calldata - received from MachineFileOpen()
+    //result - new file descriptor
+    std::cout<<"calldata:" << calldata << " result: " <<result << "\n";
+}
 /*
 VMFileOpen()attempts to open the file specified by filename, using the flags specified by flagsparameter, and mode specified by modeparameter.
 The file descriptor of the newly opened file will be placed in the location specified by filedescriptor.
@@ -109,6 +120,16 @@ The filedescriptor returned can be used in subsequent calls to VMFileClose(), VM
 When a thread calls VMFileOpen() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful opening of the file is completed.
 */
 TVMStatus VMFileOpen(const char *filename, int flags, int mode, int *filedescriptor){
+
+    //new fd placed in loc specified by *filedescriptor
+
+
+//    void *data;
+//    int result;
+
+//    MachineFileOpen(filename, flags, mode, callbackFn(data, result), data);
+//    std::cout<<"finish VMFILEOPEN \n";
+
 };
 
 /*
@@ -129,16 +150,25 @@ TVMStatus VMFileRead(int filedescriptor, void *data, int *length){
 };
 
 /*
-VMFileWrite() attempts to write the number of bytes specified in the integer referenced by lengthfrom the location specified by datato the file specified by filedescriptor.
+VMFileWrite() attempts to write the number of bytes specified in the integer referenced by length from the location specified by data to the file specified by filedescriptor.
 The filedescriptorshould have been obtained by a previous call to VMFileOpen(). The actual number of bytes transferred by the write will be updated in the lengthlocation.
 When a thread calls VMFileWrite() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful writing of the file is completed.
 */
-TVMStatus VMFileWrite(int filedescriptor, void *data, int *length){
-	std::cout << "FileWrite called\n";
-	//Just a call to other things?
-	TMachineFileCallback callback;
 
-	MachineFileWrite(filedescriptor, data, *length, *callback, NULL);
+
+TVMStatus VMFileWrite(int filedescriptor, void *data, int *length){
+        //std::cout << "FileWrite called\n";
+	//Just a call to other things?
+        //TMachineFileCallback callback;
+        //get filedescriptor from VMFILEOPEN()
+        //void *data;
+        std::cout << "FD: " <<filedescriptor << " data: "<< data << " length: " << *length << "\n";
+        if ((filedescriptor == 1) || (filedescriptor == 2)){
+            // We're writing to std in or std err, don't care about a callback
+            TMachineFileCallback callback = *callbackFn(data, filedescriptor);
+            std::cout <<"Calling back \n";
+            MachineFileWrite(filedescriptor, data, *length, callback, data);
+        }
 
 };
 
