@@ -3,9 +3,11 @@
 #include <iostream>
 
 class TCB {
-	//Local vars
-	//Instruction pointer
-	//??
+  //Thread ID
+  //stack size
+  //stack pointer
+  //return value
+	//entry point
 };
 
 extern "C" {
@@ -29,7 +31,7 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 	if (entry == NULL) {
 		std::cout << "Failed to load \n";
 	}
-	else{ 
+	else{
 		//std::cout << "Loaded module \n";
 	}
 	// Just need to pass VMmain its arguements?
@@ -113,12 +115,7 @@ TVMStatus VMThreadSleep(TVMTick tick){
 
 };
 
-void EmptyCallback(void *calldata, int result){
-    //calldata - passed into the callback function upon completion of the open file request
-    //calldata - received from MachineFileOpen()
-    //result - new file descriptor
-	;
-}
+
 /*
 VMFileOpen()attempts to open the file specified by filename, using the flags specified by flagsparameter, and mode specified by modeparameter.
 The file descriptor of the newly opened file will be placed in the location specified by filedescriptor.
@@ -126,16 +123,19 @@ The flags and mode values follow the same format as that of open system call.
 The filedescriptor returned can be used in subsequent calls to VMFileClose(), VMFileRead(), VMFileWrite(), and VMFileSeek().
 When a thread calls VMFileOpen() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful opening of the file is completed.
 */
+void FileDescriptorCallback(void* calldata, int result){
+	// Used as a callback to get the FD from the machinefileopen
+	std::cout << "result here " << result << "\n";
+//	calldata = &result;
+	MachineEnableSignals(TMachineSignalStateRef);
+}
+
 TVMStatus VMFileOpen(const char *filename, int flags, int mode, int *filedescriptor){
-
-    //new fd placed in loc specified by *filedescriptor
-
-
-//    void *data;
-//    int result;
-
-//    MachineFileOpen(filename, flags, mode, callbackFn(data, result), data);
-//    std::cout<<"finish VMFILEOPEN \n";
+	if ((filename == NULL) || (filedescriptor == NULL)){
+		return VM_STATUS_ERROR_INVALID_PARAMETER;
+	}
+	MachineSuspendSignals(TMachineSignalStateRef);
+	MachineFileOpen(filename, flags, mode, FileDescriptorCallback, filedescriptor);
 
 };
 
@@ -153,7 +153,6 @@ The filedescriptorshould have been obtained by a previous call to VMFileOpen(). 
 When a thread calls VMFileRead() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful reading of the file is completed.
 */
 TVMStatus VMFileRead(int filedescriptor, void *data, int *length){
-
 };
 
 /*
@@ -163,13 +162,20 @@ When a thread calls VMFileWrite() it blocks in the wait state VM_THREAD_STATE_WA
 */
 
 
+void EmptyCallback(void *calldata, int result){
+    //calldata - passed into the callback function upon completion of the open file request
+    //calldata - received from MachineFileOpen()
+    //result - new file descriptor
+	;
+}
+
 TVMStatus VMFileWrite(int filedescriptor, void *data, int *length){
 	//Just a call to other things?
 	//TMachineFileCallback callback;
 	//get filedescriptor from VMFILEOPEN()
 	//void *data;
 	//Suspend signals before here? Don't want race conditions
-	MachineFileWrite(filedescriptor, data, *length, EmptyCallback, data);
+	MachineFileWrite(filedescriptor, data, *length, EmptyCallback, NULL);
 
 };
 
