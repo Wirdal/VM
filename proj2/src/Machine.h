@@ -14,19 +14,19 @@ typedef struct{
     jmp_buf DJumpBuffer;
 } SMachineContext, *SMachineContextRef;
 
-// save machine context 
+// save machine context
 #define MachineContextSave(mcntx)                   \
     setjmp((mcntx)->DJumpBuffer)
 
-// restore machine context 
+// restore machine context
 #define MachineContextRestore(mcntx)                \
     longjmp((mcntx)->DJumpBuffer, 1)
 
-// switch machine context 
+// switch machine context
 #define MachineContextSwitch(mcntxold,mcntxnew)    \
     if(setjmp((mcntxold)->DJumpBuffer) == 0) longjmp((mcntxnew)->DJumpBuffer, 1)
 
-// create machine context 
+// create machine context
 void MachineContextCreate(SMachineContextRef mcntxref, void (*entry)(void *), void *param, void *stackaddr, size_t stacksize);
 
 typedef void (*TMachineAlarmCallback)(void *calldata);
@@ -51,4 +51,3 @@ void MachineFileClose(int fd, TMachineFileCallback callback, void *calldata);
 #endif
 
 #endif
-

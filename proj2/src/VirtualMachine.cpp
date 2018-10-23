@@ -1,14 +1,22 @@
 #include <VirtualMachine.h>
 #include <Machine.h>
 #include <iostream>
-
-class TCB {
-  //Thread ID
-  //stack size
-  //stack pointer
-  //return value
-	//entry point
+TVMThreadID IDCounter = 0;
+void IncrementID(){
+    IDCounter++;
+}
+struct TCB {
+    TVMThreadEntry entry; // Entry point, what function we will point to
+    void * param;
+    TVMThreadPriority prio;
+    TVMThreadID ThreadID;
+    TVMThreadState state;
+    uint8_t stack; // Not sure if this is correct stack base
 };
+
+void TCB::TCB(){
+
+}
 
 extern "C" {
  	TVMMainEntry VMLoadModule(const char *module);
@@ -49,7 +57,12 @@ VMTickMS() puts tick time interval in milliseconds in the location specified by 
 This is the value tickmsfrom the previous call to VMStart().
 */
 TVMStatus VMTickMS(int *tickmsref){
-
+    if(tickmsref){
+        return SVM_STatus_SUCCESS;
+    }
+    else{
+        return VM_STATUS-ERROR_INVALID_PARAMETER;
+    }
 };
 
 /*
@@ -66,6 +79,22 @@ The size of the threads stack is specified by memsize, and the priority is speci
 The thread identifier is put into the location specified by the tidparameter.
 */
 TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
+    if ((entry == NULL) || (tid == NULL)){
+        return VM_STATUS_ERROR_INVALID_PARAMETER;
+    }
+    TCB *tcb = new TCB;
+    tcb->entry = entry;
+    IncrementID();
+    tcb->ThreadID = IDCounter;
+    tid = & tcb->ThreadID;
+    tcb->param = param;
+    tcb->prio = prio;
+    tcb->stack = memsize;
+    tcb->state = VM_THREAD_STATE_RUNNING;
+    //TVMThreadIDRef* running = VM_THREAD_STATE_RUNNING;
+
+    return VM_STATUS_SUCCESS;
+    //VMThreadState(tid, running);
 	//Allocate space for thread
 };
 
@@ -81,7 +110,7 @@ VMThreadActivate()activates the dead thread specified by threadparameter in the 
 After activation the thread enters the ready state VM_THREAD_STATE_READY, and must begin at the entryfunction specified.
 */
 TVMStatus VMThreadActivate(TVMThreadID thread){
-	//init context here
+	//init context
 };
 
 /*
@@ -98,12 +127,17 @@ VMThreadID() puts the thread identifier of the currently running thread in the l
 */
 TVMStatus VMThreadID(TVMThreadIDRef threadref){
 
+
 };
 
 /*
 VMThreadState() retrieves the state of the thread specified by threadand places the state in the location specified by state.
 */
 TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
+    //get TCB from ID
+    // stateref = tcb -> state;
+    // return succ
+
 
 };
 
@@ -115,7 +149,6 @@ TVMStatus VMThreadSleep(TVMTick tick){
 
 };
 
-
 /*
 VMFileOpen()attempts to open the file specified by filename, using the flags specified by flagsparameter, and mode specified by modeparameter.
 The file descriptor of the newly opened file will be placed in the location specified by filedescriptor.
@@ -126,16 +159,19 @@ When a thread calls VMFileOpen() it blocks in the wait state VM_THREAD_STATE_WAI
 void FileDescriptorCallback(void* calldata, int result){
 	// Used as a callback to get the FD from the machinefileopen
 	std::cout << "result here " << result << "\n";
-//	calldata = &result;
-	MachineEnableSignals(TMachineSignalStateRef);
+	calldata = &result;
 }
 
 TVMStatus VMFileOpen(const char *filename, int flags, int mode, int *filedescriptor){
+	TMachineSignalStateRef state;
 	if ((filename == NULL) || (filedescriptor == NULL)){
+		std::cout << "Invalid FD | filename" << '\n';
 		return VM_STATUS_ERROR_INVALID_PARAMETER;
 	}
-	MachineSuspendSignals(TMachineSignalStateRef);
+	std::cout << "Calling machine file open" << '\n';
+	MachineSuspendSignals(state);
 	MachineFileOpen(filename, flags, mode, FileDescriptorCallback, filedescriptor);
+	MachineResumeSignals(state);
 
 };
 
@@ -144,7 +180,7 @@ VMFileClose() closes a file previously opened with a call to VMFileOpen().
 When a thread calls VMFileClose() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful closing of the file is completed.
 */
 TVMStatus VMFileClose(int filedescriptor){
-
+    MachineFileClose(filedescriptor, EmptyCallback, NULL);
 };
 
 /*
@@ -174,7 +210,7 @@ TVMStatus VMFileWrite(int filedescriptor, void *data, int *length){
 	//TMachineFileCallback callback;
 	//get filedescriptor from VMFILEOPEN()
 	//void *data;
-	//Suspend signals before here? Don't want race conditions
+	//Suspend signals before here? Don't want race
 	MachineFileWrite(filedescriptor, data, *length, EmptyCallback, NULL);
 
 };
