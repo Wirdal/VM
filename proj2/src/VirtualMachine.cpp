@@ -1,10 +1,19 @@
 #include <VirtualMachine.h>
 #include <Machine.h>
 #include <iostream>
+#include <list>
 TVMThreadID IDCounter = 0;
 void IncrementID(){
     IDCounter++;
 }
+/*
+class VMThread{
+    //MachineContextCreate() //what args to pass?
+
+}
+*/
+
+
 struct TCB {
     TVMThreadEntry entry; // Entry point, what function we will point to
     void * param;
@@ -14,10 +23,17 @@ struct TCB {
     uint8_t stack; // Not sure if this is correct stack base
 };
 
+std::list <TVMThreadID*> sleepingThreads;
+//TA says list necessary, shaky on why, maybe b/c mem non contiguous
+//non contig ref:  https://techdifferences.com/difference-between-contiguous-and-non-contiguous-memory-allocation.html
+//So this can be used for sleeping threads existing in non-contigous threads, i.e. thread 1,5 alseep @far away mem locs
+
+
+/*
 void TCB::TCB(){
 
 }
-
+*/
 extern "C" {
  	TVMMainEntry VMLoadModule(const char *module);
 	void VMUnloadModule(void);
@@ -32,6 +48,7 @@ are passed directly into the VMMain() function that exists in the loaded module.
 in milliseconds of the virtual machine tick is specified by the tickms parameter.
 */
 TVMStatus VMStart(int tickms, int argc, char *argv[]){
+
 	// Returns Null if fails to load
 	MachineInitialize();
 	MachineEnableSignals();
@@ -42,6 +59,15 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 	else{
 		//std::cout << "Loaded module \n";
 	}
+
+        //create idle and main threads
+
+        //returns immediated, alrarmcb called by machine
+        //tickms is the param for the AlarmCallback
+        //alarmcb(calldata) - called every tick, callback param can be NULL here
+        //sleeping thread gets decremented / other cases increment all (including sleeping thread)?
+        MachineRequestAlarm(tickms * 1000, AlarmCallback, NULL);
+
 	// Just need to pass VMmain its arguements?
 	// Or need to call what is returned
 	entry(argc, argv);
@@ -58,10 +84,10 @@ This is the value tickmsfrom the previous call to VMStart().
 */
 TVMStatus VMTickMS(int *tickmsref){
     if(tickmsref){
-        return SVM_STatus_SUCCESS;
+        return VM_STATUS_SUCCESS;
     }
     else{
-        return VM_STATUS-ERROR_INVALID_PARAMETER;
+        return VM_STATUS_ERROR_INVALID_PARAMETER;
     }
 };
 
@@ -174,13 +200,19 @@ TVMStatus VMFileOpen(const char *filename, int flags, int mode, int *filedescrip
 	MachineResumeSignals(state);
 
 };
+void EmptyCallback2(void *calldata, int result){
+    //calldata - passed into the callback function upon completion of the open file request
+    //calldata - received from MachineFileOpen()
+    //result - new file descriptor
+        ;
+}
 
 /*
 VMFileClose() closes a file previously opened with a call to VMFileOpen().
 When a thread calls VMFileClose() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful closing of the file is completed.
 */
 TVMStatus VMFileClose(int filedescriptor){
-    MachineFileClose(filedescriptor, EmptyCallback, NULL);
+    MachineFileClose(filedescriptor, EmptyCallback2, NULL);
 };
 
 /*
@@ -202,7 +234,7 @@ void EmptyCallback(void *calldata, int result){
     //calldata - passed into the callback function upon completion of the open file request
     //calldata - received from MachineFileOpen()
     //result - new file descriptor
-	;
+        ;
 }
 
 TVMStatus VMFileWrite(int filedescriptor, void *data, int *length){
