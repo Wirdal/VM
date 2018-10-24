@@ -10,7 +10,7 @@ extern "C" {
 #define VM_STATUS_ERROR_INVALID_PARAMETER       ((TVMStatus)0x02)
 #define VM_STATUS_ERROR_INVALID_ID              ((TVMStatus)0x03)
 #define VM_STATUS_ERROR_INVALID_STATE           ((TVMStatus)0x04)
-#define VM_STATUS_ERROR_INSUFFICIENT_RESOURCES  ((TVMStatus)0x05)
+#define VM_STATUS_ERROR_INSUFFICIENT_RFESOURCES  ((TVMStatus)0x05)
                                                 
 #define VM_THREAD_STATE_DEAD                    ((TVMThreadState)0x00)
 #define VM_THREAD_STATE_RUNNING                 ((TVMThreadState)0x01)

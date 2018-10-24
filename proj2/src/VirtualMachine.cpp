@@ -40,7 +40,12 @@ extern "C" {
 	TVMStatus VMFilePrint(int filedescriptor, const char *format, ...);
 }
 
-
+void AlarmCallback(void *calldata){
+    //calldata - passed into the callback function upon completion of the open file request
+    //calldata - received from MachineFileOpen()
+    //result - new file descriptor
+        ;
+}
 
 /*!
 VMStart() starts the virtual machine by loading the module specified by argv [0]. The argc and argv
@@ -61,15 +66,31 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 	}
 
         //create idle and main threads
+        //idle
+        unsigned int* maintid;
+        TVMMemorySize memorysize = 0x100000;
+        TVMThreadEntry tentry = *argv[0];
 
+        TVMThreadIDRef mainThreadID;
+        VMThreadCreate(tentry, argv[0]*, memorysize, VM_THREAD_PRIORITY_NORMAL, mainThreadID);
+
+        TVMThreadIDRef idleThreadID;
+        VMThreadCreate(tentry, argv[0]*, memorysize, VM_THREAD_PRIORITY_NORMAL, idleThreadID);
+
+        std::cout<<"Threads | idle: id"<<"\n";
         //returns immediated, alrarmcb called by machine
         //tickms is the param for the AlarmCallback
         //alarmcb(calldata) - called every tick, callback param can be NULL here
         //sleeping thread gets decremented / other cases increment all (including sleeping thread)?
-        MachineRequestAlarm(tickms * 1000, AlarmCallback, NULL);
+        MachineRequestAlarm(tickms * 1000, AlarmCallback, NULL); //third arg wrong probly
 
+
+        //machineenablesignals
 	// Just need to pass VMmain its arguements?
 	// Or need to call what is returned
+
+
+        MachineEnableSignals();
 	entry(argc, argv);
 	MachineTerminate();
 	VMUnloadModule();
