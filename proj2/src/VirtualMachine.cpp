@@ -1,18 +1,16 @@
 #include <VirtualMachine.h>
 #include <Machine.h>
 #include <iostream>
-#include <list>
 
+#include <array>
 
-//Global VariablesS
-TVMThreadID IDCounter = 0;
-std::list <TVMThreadID*> sleepingThreads;
-void IncrementID(){
-    IDCounter++;
+/*
+class VMThread{
+    //MachineContextCreate() //what args to pass?
+
 }
-//End gloabal variables
+*/
 
-//Thread Control Block
 struct TCB {
     TVMThreadEntry entry; // Entry point, what function we will point to
     void * param;
@@ -20,10 +18,41 @@ struct TCB {
     TVMThreadID ThreadID;
     TVMThreadState state;
     uint8_t stack; // Not sure if this is correct stack base
+    TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack);
+    // TCB()
 };
 
+TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack){
+    entry = entry;
+    param = param;
+    prio = prio;
+    ThreadID = ThreadID;
+    state = state;
+    stack = stack;
+}
 
+struct TCBList{
+    std::array<TCB*, 1000> Tlist;
+    static unsigned int IDCounter;
+    TCB* FindTCB(TVMThreadID IDnum);
+    int IncrementID();
+};
 
+TCB* TCBList::FindTCB(TVMThreadID IDnum){
+    for(auto s: Tlist)
+        if (s->ThreadID == IDnum){
+            return s;
+        }
+} 
+
+int TCBList::IncrementID() {
+    return IDCounter = IDCounter + 1;
+}
+
+std::array<TCB*, 1000> GetList(){
+    return TList;
+}
+// std::list <TVMThreadID*> sleepingThreads;
 
 //TA says list necessary, shaky on why, maybe b/c mem non contiguous
 //non contig ref:  https://techdifferences.com/difference-between-contiguous-and-non-contiguous-memory-allocation.html
@@ -95,7 +124,7 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
         //tickms is the param for the AlarmCallback
         //alarmcb(calldata) - called every tick, callback param can be NULL here
         //sleeping thread gets decremented / other cases increment all (including sleeping thread)?
-        MachineRequestAlarm(tickms * 1000, AlarmCallback, NULL); //third arg wrong probly
+        // MachineRequestAlarm(tickms * 1000, AlarmCallback, NULL);
 
 
         //machineenablesignals
@@ -144,15 +173,14 @@ TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsiz
     }
     TCB *tcb = new TCB;
     tcb->entry = entry;
-    IncrementID();
-    tcb->ThreadID = IDCounter;
+    tcb->ThreadID = TCBList::incrementID();
     tid = & tcb->ThreadID;
     tcb->param = param;
     tcb->prio = prio;
     tcb->stack = memsize;
     tcb->state = VM_THREAD_STATE_RUNNING;
     //TVMThreadIDRef* running = VM_THREAD_STATE_RUNNING;
-
+    // Add it to the list
     return VM_STATUS_SUCCESS;
     //VMThreadState(tid, running);
 	//Allocate space for thread
