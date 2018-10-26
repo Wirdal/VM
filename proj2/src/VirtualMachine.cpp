@@ -11,45 +11,42 @@ class VMThread{
 */
 
 struct TCB {
-public:
     TVMThreadEntry entry; // Entry point, what function we will point to
     void * param;
     TVMThreadPriority prio;
     TVMThreadID ThreadID;
     TVMThreadState state;
     uint8_t stack; // Not sure if this is correct stack base
+    TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack);
     // TCB()
 };
 
+TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack){
+    entry = entry;
+    param = param;
+    prio = prio;
+    ThreadID = ThreadID;
+    state = state;
+    stack = stack;
+}
+
 struct TCBList{
-protected:
-    std::list<TCB*> Tlist;
+    std::array<TCB*, 1000> Tlist;
     static unsigned int IDCounter;
-public:
-    TCB* findTCB_fromID(TVMThreadID){
-        //Return the index of the ID that was passed to us
-        for (auto it = Tlist.begin(); it != Tlist.end(); ++it){
-            if (it -> ThreadID == TVMThreadID){
-                return it;
-            }
-        }
-    }
-
-    std::list<TCB*> findTCBs_fromState(TVMThreadState){
-
-    }
-
-    void addTCB(TCB*){
-
-    }
-    static TVMThreadID incrementID(){
-        return static_cast<TVMThreadID>(IDCounter);
-    }
-
-    // TCBList(){
-
-    // }
+    TCB* FindTCB(TVMThreadID IDnum);
+    int TCBList::IncrementID();
 };
+
+TCB* TCBList::FindTCB(TVMThreadID IDnum){
+    for(auto s: Tlist)
+        if (s->ThreadID == IDnum){
+            return s;
+        }
+} 
+
+int TCBList::IncrementID() {
+    return IDCounter = IDCounter + 1;
+}
 
 // std::list <TVMThreadID*> sleepingThreads;
 //TA says list necessary, shaky on why, maybe b/c mem non contiguous
