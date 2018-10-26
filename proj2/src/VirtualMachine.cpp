@@ -22,20 +22,20 @@ struct TCB {
     // TCB()
 };
 
-TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack){
+TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadState state, uint8_t stack){
     entry = entry;
     param = param;
     prio = prio;
-    ThreadID = ThreadID;
+    ThreadID = TCBList::IncrementID();
     state = state;
     stack = stack;
 }
 
 struct TCBList{
     std::array<TCB*, 1000> Tlist;
-    static unsigned int IDCounter;
+    static TVMThreadID IDCounter;
     TCB* FindTCB(TVMThreadID IDnum);
-    int IncrementID();
+    TVMTheadID IncrementID();
 };
 
 TCB* TCBList::FindTCB(TVMThreadID IDnum){
@@ -45,7 +45,7 @@ TCB* TCBList::FindTCB(TVMThreadID IDnum){
         }
 } 
 
-int TCBList::IncrementID() {
+TVMThreadID TCBList::IncrementID() {
     return IDCounter = IDCounter + 1;
 }
 
