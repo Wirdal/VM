@@ -1,6 +1,7 @@
 #include <VirtualMachine.h>
 #include <Machine.h>
 #include <iostream>
+
 #include <array>
 
 /*
@@ -52,6 +53,7 @@ std::array<TCB*, 1000> GetList(){
     return TList;
 }
 // std::list <TVMThreadID*> sleepingThreads;
+
 //TA says list necessary, shaky on why, maybe b/c mem non contiguous
 //non contig ref:  https://techdifferences.com/difference-between-contiguous-and-non-contiguous-memory-allocation.html
 //So this can be used for sleeping threads existing in non-contigous threads, i.e. thread 1,5 alseep @far away mem locs
@@ -63,9 +65,17 @@ void TCB::TCB(){
 }
 */
 extern "C" {
+        //typedef void (*TVMMainEntry)(int, char*[]);  //This is why were couldn't access the fn in main LOL
  	TVMMainEntry VMLoadModule(const char *module);
 	void VMUnloadModule(void);
 	TVMStatus VMFilePrint(int filedescriptor, const char *format, ...);
+}
+
+void AlarmCallback(void *calldata){
+    //calldata - passed into the callback function upon completion of the open file request
+    //calldata - received from MachineFileOpen()
+    //result - new file descriptor
+        ;
 }
 
 
@@ -89,15 +99,40 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 	}
 
         //create idle and main threads
+        //idle
+        unsigned int* maintid;
+        TVMMemorySize memorysize = 0x100000;
+        //TVMThreadEntry tentry = *argv[0];
+        TVMThreadEntry tentry = NULL;
+    
+        //CREATE MAIN THREAD
+        TVMThreadIDRef mainThreadID = 0;
+        //mainetry = entry;
 
+        TCB *maintcb = new TCB;
+        maintcb->ThreadID = 0; //mainThreadID
+        maintcb->state = VM_THREAD_STATE_RUNNING;
+
+        VMThreadCreate(AlarmCallback, NULL, memorysize, VM_THREAD_PRIORITY_NORMAL, mainThreadID);
+        //VMThreadActivate
+
+        //CREATE IDLE THREAD
+        //TVMThreadIDRef idleThreadID;
+
+        std::cout<<"Threads | idle: id"<<"\n";
         //returns immediated, alrarmcb called by machine
         //tickms is the param for the AlarmCallback
         //alarmcb(calldata) - called every tick, callback param can be NULL here
         //sleeping thread gets decremented / other cases increment all (including sleeping thread)?
         // MachineRequestAlarm(tickms * 1000, AlarmCallback, NULL);
 
+
+        //machineenablesignals
 	// Just need to pass VMmain its arguements?
 	// Or need to call what is returned
+
+
+        MachineEnableSignals();
 	entry(argc, argv);
 	MachineTerminate();
 	VMUnloadModule();
