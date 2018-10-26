@@ -2,18 +2,17 @@
 #include <Machine.h>
 #include <iostream>
 #include <list>
+
+
+//Global VariablesS
 TVMThreadID IDCounter = 0;
+std::list <TVMThreadID*> sleepingThreads;
 void IncrementID(){
     IDCounter++;
 }
-/*
-class VMThread{
-    //MachineContextCreate() //what args to pass?
+//End gloabal variables
 
-}
-*/
-
-
+//Thread Control Block
 struct TCB {
     TVMThreadEntry entry; // Entry point, what function we will point to
     void * param;
@@ -23,7 +22,9 @@ struct TCB {
     uint8_t stack; // Not sure if this is correct stack base
 };
 
-std::list <TVMThreadID*> sleepingThreads;
+
+
+
 //TA says list necessary, shaky on why, maybe b/c mem non contiguous
 //non contig ref:  https://techdifferences.com/difference-between-contiguous-and-non-contiguous-memory-allocation.html
 //So this can be used for sleeping threads existing in non-contigous threads, i.e. thread 1,5 alseep @far away mem locs
@@ -35,6 +36,7 @@ void TCB::TCB(){
 }
 */
 extern "C" {
+        //typedef void (*TVMMainEntry)(int, char*[]);  //This is why were couldn't access the fn in main LOL
  	TVMMainEntry VMLoadModule(const char *module);
 	void VMUnloadModule(void);
 	TVMStatus VMFilePrint(int filedescriptor, const char *format, ...);
@@ -46,6 +48,8 @@ void AlarmCallback(void *calldata){
     //result - new file descriptor
         ;
 }
+
+
 
 /*!
 VMStart() starts the virtual machine by loading the module specified by argv [0]. The argc and argv
@@ -69,13 +73,22 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
         //idle
         unsigned int* maintid;
         TVMMemorySize memorysize = 0x100000;
-        TVMThreadEntry tentry = *argv[0];
+        //TVMThreadEntry tentry = *argv[0];
+        TVMThreadEntry tentry = NULL;
+    
+        //CREATE MAIN THREAD
+        TVMThreadIDRef mainThreadID = 0;
+        //mainetry = entry;
 
-        TVMThreadIDRef mainThreadID;
-        VMThreadCreate(tentry, argv[0]*, memorysize, VM_THREAD_PRIORITY_NORMAL, mainThreadID);
+        TCB *maintcb = new TCB;
+        maintcb->ThreadID = 0; //mainThreadID
+        maintcb->state = VM_THREAD_STATE_RUNNING;
 
-        TVMThreadIDRef idleThreadID;
-        VMThreadCreate(tentry, argv[0]*, memorysize, VM_THREAD_PRIORITY_NORMAL, idleThreadID);
+        VMThreadCreate(AlarmCallback, NULL, memorysize, VM_THREAD_PRIORITY_NORMAL, mainThreadID);
+        //VMThreadActivate
+
+        //CREATE IDLE THREAD
+        //TVMThreadIDRef idleThreadID;
 
         std::cout<<"Threads | idle: id"<<"\n";
         //returns immediated, alrarmcb called by machine
