@@ -1,5 +1,5 @@
 #include <VirtualMachine.h>
-// #include <Machine.h>
+#include <Machine.h>
 #include <iostream>
 
 #include <array>
@@ -22,7 +22,7 @@ struct TCB {
     // TCB()
 };
 
-TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadState state, uint8_t stack){
+TCB TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadState state, uint8_t stack){
     entry = entry;
     param = param;
     prio = prio;
@@ -30,6 +30,7 @@ TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadSt
     state = state;
     stack = stack;
 }
+
 // This neeeds to be created ONCE
 struct TCBList{
 
@@ -115,17 +116,21 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
         TVMMemorySize memorysize = 0x100000;
         //TVMThreadEntry tentry = *argv[0];
         TVMThreadEntry tentry = NULL;
-    
-        //CREATE MAIN THREAD
-        TVMThreadIDRef mainThreadID = 0;
+
         //mainetry = entry;
 
-        TCB *maintcb = new TCB;
-        maintcb->ThreadID = 0; //mainThreadID
-        maintcb->state = VM_THREAD_STATE_RUNNING;
+        //TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack);
+        // TCB()
+        TVMThreadID maintid = 0;
+        TVMThreadPriority mainpriority = VM_THREAD_PRIORITY_NORMAL;
 
-        VMThreadCreate(AlarmCallback, NULL, memorysize, VM_THREAD_PRIORITY_NORMAL, mainThreadID);
-        //VMThreadActivate
+        //Creates Main thread
+        TCB maintcb = TCB(entry, NULL, mainpriority, maintid, VM_THREAD_STATE_RUNNING, memorysize);
+
+        //Creates Idle Thread
+        TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
+        VMThreadCreate(AlarmCallback, NULL, memorysize, VM_THREAD_PRIORITY_NORMAL, idleID);
+        //VMThreadActivate idle ID
 
         //CREATE IDLE THREAD
         //TVMThreadIDRef idleThreadID;
@@ -182,8 +187,10 @@ TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsiz
     if ((entry == NULL) || (tid == NULL)){
         return VM_STATUS_ERROR_INVALID_PARAMETER;
     }
-    TCB NewTCB = TCB(entry, param, prio, VM_THREAD_STATE_READY, memsize);
-    GlobalTCBList.
+    //TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack);
+    TVMThreadID thread_id = TCBList::IDCounter;
+    TCB NewTCB = TCB(entry, param, prio, thread_id, VM_THREAD_STATE_READY, memsize);
+    //GlobalTCBList.
     // Add it to the list
     return VM_STATUS_SUCCESS;
     //VMThreadState(tid, running);
