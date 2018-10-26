@@ -1,7 +1,7 @@
 #include <VirtualMachine.h>
 #include <Machine.h>
 #include <iostream>
-#include <list>
+#include <array>
 
 /*
 class VMThread{
@@ -34,7 +34,7 @@ struct TCBList{
     std::array<TCB*, 1000> Tlist;
     static unsigned int IDCounter;
     TCB* FindTCB(TVMThreadID IDnum);
-    int TCBList::IncrementID();
+    int IncrementID();
 };
 
 TCB* TCBList::FindTCB(TVMThreadID IDnum){
