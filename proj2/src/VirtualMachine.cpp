@@ -1,5 +1,5 @@
 #include <VirtualMachine.h>
-#include <Machine.h>
+// #include <Machine.h>
 #include <iostream>
 
 #include <array>
@@ -30,12 +30,15 @@ TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadSt
     state = state;
     stack = stack;
 }
-
+// This neeeds to be created ONCE
 struct TCBList{
+
     std::array<TCB*, 1000> Tlist;
     static TVMThreadID IDCounter;
     TCB* FindTCB(TVMThreadID IDnum);
     TVMTheadID IncrementID();
+    std::array<TCB*, 1000> GetList();
+    TVMThreadID TCBList::GetID();
 };
 
 TCB* TCBList::FindTCB(TVMThreadID IDnum){
@@ -49,8 +52,15 @@ TVMThreadID TCBList::IncrementID() {
     return IDCounter = IDCounter + 1;
 }
 
-std::array<TCB*, 1000> GetList(){
+TVMThreadID TCBList::GetID(){
+    return IDCounter;
+}
+std::array<TCB*, 1000> TCBList::GetList(){
     return TList;
+}
+
+void TCBList::AddTCB(TCB*){
+    Tlist
 }
 // std::list <TVMThreadID*> sleepingThreads;
 
@@ -85,6 +95,7 @@ VMStart() starts the virtual machine by loading the module specified by argv [0]
 are passed directly into the VMMain() function that exists in the loaded module. The time
 in milliseconds of the virtual machine tick is specified by the tickms parameter.
 */
+GlobalTCBList = new TCBList;
 TVMStatus VMStart(int tickms, int argc, char *argv[]){
 
 	// Returns Null if fails to load
@@ -171,15 +182,8 @@ TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsiz
     if ((entry == NULL) || (tid == NULL)){
         return VM_STATUS_ERROR_INVALID_PARAMETER;
     }
-    TCB *tcb = new TCB;
-    tcb->entry = entry;
-    tcb->ThreadID = TCBList::incrementID();
-    tid = & tcb->ThreadID;
-    tcb->param = param;
-    tcb->prio = prio;
-    tcb->stack = memsize;
-    tcb->state = VM_THREAD_STATE_RUNNING;
-    //TVMThreadIDRef* running = VM_THREAD_STATE_RUNNING;
+    TCB NewTCB = TCB(entry, param, prio, VM_THREAD_STATE_READY, memsize);
+    GlobalTCBList.
     // Add it to the list
     return VM_STATUS_SUCCESS;
     //VMThreadState(tid, running);
