@@ -48,6 +48,9 @@ int TCBList::IncrementID() {
     return IDCounter = IDCounter + 1;
 }
 
+std::array<TCB*, 1000> GetList(){
+    return TList;
+}
 // std::list <TVMThreadID*> sleepingThreads;
 //TA says list necessary, shaky on why, maybe b/c mem non contiguous
 //non contig ref:  https://techdifferences.com/difference-between-contiguous-and-non-contiguous-memory-allocation.html
