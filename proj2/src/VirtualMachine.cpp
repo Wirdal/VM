@@ -17,7 +17,9 @@ struct TCB {
     TVMThreadPriority prio;
     TVMThreadID ThreadID;
     TVMThreadState state;
-    uint8_t stack; // Not sure if this is correct stack base
+    uint8_t stack_size;
+    uint8_t *stack= new uint8_t[stack_size]; // Not sure if this is correct stack base;
+
     TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack);
     // TCB()
 };
@@ -113,7 +115,7 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 
         //create idle and main threads
         //idle
-        unsigned int* maintid;
+        TVMThreadID maintid;
         TVMMemorySize memorysize = 0x100000;
         //TVMThreadEntry tentry = *argv[0];
         TVMThreadEntry tentry = NULL;
@@ -122,17 +124,18 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 
         //TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack);
         // TCB()
-        TVMThreadID maintid = 0;
+        //TVMThreadID maintid = 0;
         TVMThreadPriority mainpriority = VM_THREAD_PRIORITY_NORMAL;
 
         //Creates Main thread
-        TCB maintcb = TCB(entry, NULL, mainpriority, maintid, VM_THREAD_STATE_RUNNING, memorysize);
+ 
+        TCB maintcb = TCB(AlarmCallback, NULL, mainpriority, maintid, VM_THREAD_STATE_RUNNING, memorysize);
 
         //Creates Idle Thread
         TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
-        VMThreadCreate(AlarmCallback, NULL, memorysize, VM_THREAD_PRIORITY_NORMAL, idleID);
+        VMThreadCreate(AlarmCallback, NULL, memorysize, VM_THREAD_PRIORITY_NORMAL, &idleID);
         //VMThreadActivate idle ID
-
+    
         //CREATE IDLE THREAD
         //TVMThreadIDRef idleThreadID;
 
@@ -150,10 +153,10 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 
 
         MachineEnableSignals();
-	entry(argc, argv);
-	MachineTerminate();
-	VMUnloadModule();
-	return VM_STATUS_SUCCESS;
+        entry(argc, argv);
+	    MachineTerminate();
+        VMUnloadModule();
+        return VM_STATUS_SUCCESS;
 
 };
 
