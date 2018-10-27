@@ -108,6 +108,7 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 	// Returns Null if fails to load
 	MachineInitialize();
 	MachineEnableSignals();
+    TMachineSignalStateRef signal;
 	TVMMainEntry entry = VMLoadModule(argv[0]);
 	if (entry == NULL) {
 		std::cout << "Failed to load \n";
@@ -115,28 +116,16 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 	else{
 		//std::cout << "Loaded module \n";
 	}
-
-        //create idle and main threads
-        //idle
+        //Create main thread, but we don't want to disable signal
         TVMThreadID maintid;
         TVMMemorySize memorysize = 0x100000;
-        //TVMThreadEntry tentry = *argv[0];
-        TVMThreadEntry tentry = NULL;
-
-        //mainetry = entry;
-
-        //TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack);
-        // TCB()
-        //TVMThreadID maintid = 0;
         TVMThreadPriority mainpriority = VM_THREAD_PRIORITY_NORMAL;
+        TCB *maintcb = new TCB(AlarmCallback, NULL, mainpriority, maintid, VM_THREAD_STATE_RUNNING, memorysize);
+        globalList.AddTCB(maintcb);
 
-        //Creates Main thread
- 
-        TCB maintcb =  TCB(AlarmCallback, NULL, mainpriority, maintid, VM_THREAD_STATE_RUNNING, memorysize);
-
-        //Creates Idle Thread
+        //Create Idle Thread
         TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
-        VMThreadCreate(AlarmCallback, NULL, memorysize, VM_THREAD_PRIORITY_NORMAL, &idleID);
+        VMThreadCreate(AlarmCallback, NULL, memorysize,  ((TVMThreadPriority)0x01), &idleID);
         //VMThreadActivate idle ID
     
         //CREATE IDLE THREAD
@@ -151,11 +140,11 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 
 
         //machineenablesignals
-	// Just need to pass VMmain its arguements?
-	// Or need to call what is returned
+        // Just need to pass VMmain its arguements?
+        // Or need to call what is returned
 
 
-        MachineEnableSignals();
+        MachineSuspendSignals(signal);
         entry(argc, argv);
 	    MachineTerminate();
         VMUnloadModule();
