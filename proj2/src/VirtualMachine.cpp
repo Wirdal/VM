@@ -3,6 +3,7 @@
 #include <iostream>
 #include <vector>
 #include <array>
+#include <algorithm>
 
 /*
 class VMThread{
@@ -10,24 +11,31 @@ class VMThread{
 
 }
 */
-
+TCBList globalList;
 struct TCB {
     TVMThreadEntry entry; // Entry point, what function we will point to
     void * param;
+    TVMTick ticks;
     TVMThreadPriority prio;
     TVMThreadID ThreadID;
     TVMThreadState state;
     uint8_t stack; // Not sure if this is correct stack base
-    TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack);
+    void SetState(TVMThreadState state);
+    TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, uint8_t stack);
     // TCB()
 };
 
-TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack){
+void TCB::SetState(TVMThreadState state){
+    state=state;
+}
+
+TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, uint8_t stack){
     entry = entry;
+    ticks = 0; //Not sure about this one
     param = param;
     prio = prio;
-    ThreadID = 0; // needs to be assigned later
-    state = state;
+    ThreadID = TCBList::IncrementID(); 
+    state = VM_THREAD_STATE_DEAD;
     stack = stack;
 }
 
@@ -40,6 +48,8 @@ struct TCBList{
     std::vector<TCB*> GetList();
     static TVMThreadID GetID();
     void AddTCB(TCB*);
+    void RemoveTCB(TVMThreadID IDnum)
+    TCBList();
 };
 
 TCB* TCBList::FindTCB(TVMThreadID IDnum){
@@ -47,6 +57,7 @@ TCB* TCBList::FindTCB(TVMThreadID IDnum){
         if (s->ThreadID == IDnum){
             return s;
         }
+    return NULL;
 }
 
 TVMThreadID TCBList::IncrementID() {
@@ -63,6 +74,10 @@ std::vector<TCB*> TCBList::GetList(){
 
 void TCBList::AddTCB(TCB *TCB){
     Tlist.push_back(TCB);
+}
+
+void TCBList::RemoveTCB(TVMThreadID IDnum){
+
 }
 // std::list <TVMThreadID*> sleepingThreads;
 
@@ -97,7 +112,6 @@ VMStart() starts the virtual machine by loading the module specified by argv [0]
 are passed directly into the VMMain() function that exists in the loaded module. The time
 in milliseconds of the virtual machine tick is specified by the tickms parameter.
 */
-// GlobalTCBList = new TCBList;
 TVMStatus VMStart(int tickms, int argc, char *argv[]){
 
 	// Returns Null if fails to load
@@ -149,7 +163,7 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 	// Or need to call what is returned
 
 
-        MachineEnableSignals();
+    MachineEnableSignals();
 	entry(argc, argv);
 	MachineTerminate();
 	VMUnloadModule();
@@ -190,7 +204,7 @@ TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsiz
     }
     //TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack);
     TVMThreadID thread_id = TCBList::IDCounter;
-    TCB NewTCB = TCB(entry, param, prio, thread_id, VM_THREAD_STATE_READY, memsize);
+    TCB NewTCB = TCB(entry, param, prio, VM_THREAD_STATE_READY, memsize);
     //GlobalTCBList.
     // Add it to the list
     return VM_STATUS_SUCCESS;
@@ -202,7 +216,17 @@ TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsiz
 VMThreadDelete()deletes the dead thread specified by threadparameter from the virtual machine.
 */
 TVMStatus VMThreadDelete(TVMThreadID thread){
-
+    TCB* FoundTCB = globalList.FindTCB(thread);
+    if (FoundTCB == NULL){
+        return VM_STATUS_ERROR_INVALID_ID;
+    }
+    else if (FoundTCB->state != VM_THREAD_STATE_DEAD){
+        return VM_STATUS_ERROR_INVALID_STATE;
+    }
+    else {
+        // Remove the thread
+        return VM_STATUS_SUCCESS;
+    }
 };
 
 /*
@@ -210,7 +234,18 @@ VMThreadActivate()activates the dead thread specified by threadparameter in the 
 After activation the thread enters the ready state VM_THREAD_STATE_READY, and must begin at the entryfunction specified.
 */
 TVMStatus VMThreadActivate(TVMThreadID thread){
-	//init context
+	TCB* FoundTCB = globalList.FindTCB(thread);
+    if (FoundTCB == NULL){
+        return VM_STATUS_ERROR_INVALID_ID;
+    }
+    else if (FoundTCB->state != VM_THREAD_STATE_DEAD){
+        return VM_STATUS_ERROR_INVALID_STATE;
+    }
+    else {
+        FoundTCB->SetState(VM_THREAD_STATE_READY)
+        // Also add it to the list of ready threads
+        return VM_STATUS_SUCCESS;
+    }
 };
 
 /*
@@ -219,26 +254,42 @@ After termination the thread entersthe state VM_THREAD_STATE_DEAD.
 The termination of a thread can triMachineFileWritegger another thread to be scheduled.
 */
 TVMStatus VMThreadTerminate(TVMThreadID thread){
-
+    TCB* FoundTCB = globalList.FindTCB(thread);
+    if (FoundTCB == NULL){
+        return VM_STATUS_ERROR_INVALID_ID;
+    }
+    else if (FoundTCB->state != VM_THREAD_STATE_DEAD){
+        return VM_STATUS_ERROR_INVALID_STATE;
+    }
+    else {
+        FoundTCB->SetState(VM_THREAD_STATE_READY)
+        // Also add it to the list of ready threads
+        return VM_STATUS_SUCCESS;
+    }
 };
 
 /*
 VMThreadID() puts the thread identifier of the currently running thread in the location specified by threadref.
 */
 TVMStatus VMThreadID(TVMThreadIDRef threadref){
-
-
+    //No idea how to do this one
 };
 
 /*
 VMThreadState() retrieves the state of the thread specified by threadand places the state in the location specified by state.
 */
 TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
-    //get TCB from ID
-    // stateref = tcb -> state;
-    // return succ
-
-
+    TCB* FoundTCB = globalList.FindTCB(thread);
+    if (FoundTCB == NULL){
+        return VM_STATUS_ERROR_INVALID_ID;
+    }
+    else if (stateref == NULL){
+        return VM_STATUS_ERROR_INVALID_PARAMETER;
+    }
+    else{
+        stateref = FoundTCB -> state;
+        return VM_STATUS_SUCCESS;
+    }
 };
 
 /*
