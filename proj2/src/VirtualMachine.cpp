@@ -51,6 +51,9 @@ TCB* TCBList::FindTCB(TVMThreadID IDnum){
         }
 }
 
+TCBList globalList;
+
+/*
 TVMThreadID TCBList::IncrementID() {
     return IDCounter = IDCounter + 1;
 }
@@ -58,7 +61,7 @@ TVMThreadID TCBList::IncrementID() {
 TVMThreadID TCBList::GetID(){
     return IDCounter;
 }
-
+*/
 std::vector<TCB*> TCBList::GetList(){
     return Tlist;
 }
@@ -129,7 +132,7 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 
         //Creates Main thread
  
-        TCB maintcb = TCB(AlarmCallback, NULL, mainpriority, maintid, VM_THREAD_STATE_RUNNING, memorysize);
+        TCB maintcb =  TCB(AlarmCallback, NULL, mainpriority, maintid, VM_THREAD_STATE_RUNNING, memorysize);
 
         //Creates Idle Thread
         TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
@@ -188,17 +191,24 @@ The size of the threads stack is specified by memsize, and the priority is speci
 The thread identifier is put into the location specified by the tidparameter.
 */
 TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
+    TMachineSignalStateRef signal;
+    MachineSuspendSignals(signal); //suspend threads so we can run
     if ((entry == NULL) || (tid == NULL)){
+        MachineResumeSignals(signal);
         return VM_STATUS_ERROR_INVALID_PARAMETER;
     }
-    //TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack);
-    TVMThreadID thread_id = TCBList::IDCounter;
-    TCB NewTCB = TCB(entry, param, prio, thread_id, VM_THREAD_STATE_READY, memsize);
-    //GlobalTCBList.
-    // Add it to the list
+    
+    //Create the thread control block
+    TVMThreadID thread_id = *tid;  //TVMThreadIDRef to TVMThreadID
+    TCB *NewTCB = new TCB(entry, param, prio, thread_id, VM_THREAD_STATE_READY, memsize);
+    //Increment ThreadID
+    NewTCB->ThreadID+1;     //equivalent to (*NewTCB).ThreadID = (*NewTCB).ThreadID + 1;
+    globalList.AddTCB(NewTCB);
+    //Add it to the list
+    *tid = (*NewTCB).ThreadID;
+    MachineResumeSignals(signal); //resume other threads
     return VM_STATUS_SUCCESS;
-    //VMThreadState(tid, running);
-	//Allocate space for thread
+
 };
 
 /*
