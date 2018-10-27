@@ -1,7 +1,7 @@
 #include <VirtualMachine.h>
 #include <Machine.h>
 #include <iostream>
-
+#include <vector>
 #include <array>
 
 /*
@@ -22,24 +22,24 @@ struct TCB {
     // TCB()
 };
 
-TCB TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadState state, uint8_t stack){
+TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack){
     entry = entry;
     param = param;
     prio = prio;
-    ThreadID = TCBList::IncrementID();
+    ThreadID = 0; // needs to be assigned later
     state = state;
     stack = stack;
 }
 
 // This neeeds to be created ONCE
 struct TCBList{
-
-    std::array<TCB*, 1000> Tlist;
+    std::vector<TCB*> Tlist;
     static TVMThreadID IDCounter;
     TCB* FindTCB(TVMThreadID IDnum);
-    TVMTheadID IncrementID();
-    std::array<TCB*, 1000> GetList();
-    TVMThreadID TCBList::GetID();
+    static TVMThreadID IncrementID();
+    std::vector<TCB*> GetList();
+    static TVMThreadID GetID();
+    void AddTCB(TCB*);
 };
 
 TCB* TCBList::FindTCB(TVMThreadID IDnum){
@@ -47,7 +47,7 @@ TCB* TCBList::FindTCB(TVMThreadID IDnum){
         if (s->ThreadID == IDnum){
             return s;
         }
-} 
+}
 
 TVMThreadID TCBList::IncrementID() {
     return IDCounter = IDCounter + 1;
@@ -56,12 +56,13 @@ TVMThreadID TCBList::IncrementID() {
 TVMThreadID TCBList::GetID(){
     return IDCounter;
 }
-std::array<TCB*, 1000> TCBList::GetList(){
-    return TList;
+
+std::vector<TCB*> TCBList::GetList(){
+    return Tlist;
 }
 
-void TCBList::AddTCB(TCB*){
-    Tlist
+void TCBList::AddTCB(TCB *TCB){
+    Tlist.push_back(TCB);
 }
 // std::list <TVMThreadID*> sleepingThreads;
 
@@ -96,7 +97,7 @@ VMStart() starts the virtual machine by loading the module specified by argv [0]
 are passed directly into the VMMain() function that exists in the loaded module. The time
 in milliseconds of the virtual machine tick is specified by the tickms parameter.
 */
-GlobalTCBList = new TCBList;
+// GlobalTCBList = new TCBList;
 TVMStatus VMStart(int tickms, int argc, char *argv[]){
 
 	// Returns Null if fails to load
