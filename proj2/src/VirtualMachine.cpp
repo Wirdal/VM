@@ -287,7 +287,7 @@ TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
         return VM_STATUS_ERROR_INVALID_PARAMETER;
     }
     else{
-        stateref = FoundTCB -> &state;
+        stateref = &FoundTCB -> state;
         return VM_STATUS_SUCCESS;
     }
 };
