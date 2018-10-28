@@ -50,6 +50,7 @@ struct TCBList{
     static TVMThreadID GetID();
     void AddTCB(TCB*);
     void RemoveTCB(TVMThreadID IDnum);
+    TVMThreadID NextReadyThread();
     TCBList();
     std::vector<TCB*> SleepingThreads;
     std::vector<TCB*> HighReady;
@@ -70,6 +71,26 @@ TVMThreadID TCBList::IncrementID() {
     return IDCounter = IDCounter + 1;
 }
 
+TVMThreadID TCBList::NextReadyThread(){
+    //Finds the next ready thread in the schedular
+    // Returns the ID to it
+    if (HighReady.empty()) {
+        if (MediumReady.empty()){
+            if (LowReady.empty()){
+                return 0;
+            }
+            else{
+                return LowReady[0]->ThreadID;
+            }
+        }
+        else {
+            return MediumReady[0]->ThreadID;
+        }
+    }
+    else{
+        return HighReady[0]->ThreadID;
+    }
+}
 TVMThreadID TCBList::GetID(){
     return IDCounter;
 }
@@ -86,7 +107,7 @@ void TCBList::RemoveTCB(TVMThreadID IDnum){
     int i = 0;
     for(auto s: Tlist)
         if (s->ThreadID == IDnum){
-            Tlist = std::remove(std::begin(Tlist), std::end(Tlist), s);
+            Tlist.erase(Tlist.begin()+ i); // Need to remove it from the schedular as well?
             return;
         }
         ++i;
@@ -216,7 +237,7 @@ TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsiz
     }
     //TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack);
     TCB NewTCB = TCB(entry, param, prio, globalList.IncrementID(), memsize);
-    globalList.AddTCB(NewTCB);
+    globalList.AddTCB(&NewTCB);
     // Add it to the list
      MachineResumeSignals(GlobalSignal);
     return VM_STATUS_SUCCESS;
@@ -242,7 +263,7 @@ TVMStatus VMThreadDelete(TVMThreadID thread){
     }
 };
 
-/*git p
+/*
 VMThreadActivate()activates the dead thread specified by threadparameter in the virtual machine.
 After activation the thread enters the ready state VM_THREAD_STATE_READY, and must begin at the entryfunction specified.
 */
@@ -290,8 +311,8 @@ TVMStatus VMThreadTerminate(TVMThreadID thread){
         return VM_STATUS_ERROR_INVALID_STATE;
     }
     else {
-        FoundTCB->SetState(VM_THREAD_STATE_READY);
-        // Also add it to the list of ready threads
+        FoundTCB->SetState(VM_THREAD_STATE_DEAD);
+        // Move it to dead
         return VM_STATUS_SUCCESS;
     }
 };
