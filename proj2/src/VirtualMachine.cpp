@@ -212,7 +212,6 @@ TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsiz
         return VM_STATUS_ERROR_INVALID_PARAMETER;
     }
     //TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack);
-    TVMThreadID thread_id = TCBList::IDCounter;
     TCB NewTCB = TCB(entry, param, prio, globalList.IncrementID(), memsize);
     //GlobalTCBList.
     // Add it to the list
