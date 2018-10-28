@@ -49,6 +49,11 @@ struct TCBList{
     void AddTCB(TCB*);
     void RemoveTCB(TVMThreadID IDnum);
     TCBList();
+    std::vector<TCB*> SleepingThreads;
+    std::vector<TCB*> HighReady;
+    std::vector<TCB*> MediumReady;
+    std::vector<TCB*> LowReady;
+
 };
 
 TCB* TCBList::FindTCB(TVMThreadID IDnum){
@@ -76,7 +81,12 @@ void TCBList::AddTCB(TCB *TCB){
 }
 
 void TCBList::RemoveTCB(TVMThreadID IDnum){
-
+    int i = 0;
+    for(auto s: Tlist)
+        ++i;
+        if (s->ThreadID == IDnum){
+        }
+    Tlist.erase(i);
 }
 TCBList globalList = TCBList();
 // std::list <TVMThreadID*> sleepingThreads;
@@ -224,7 +234,8 @@ TVMStatus VMThreadDelete(TVMThreadID thread){
         return VM_STATUS_ERROR_INVALID_STATE;
     }
     else {
-        // Remove the thread
+        // Remove the thread from the scheduler too
+        globalList.RemoveTCB(thread)
         return VM_STATUS_SUCCESS;
     }
 };
