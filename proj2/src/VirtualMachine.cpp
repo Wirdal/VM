@@ -208,14 +208,16 @@ The size of the threads stack is specified by memsize, and the priority is speci
 The thread identifier is put into the location specified by the tidparameter.
 */
 TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
+    MachineSuspendSignals(GlobalSignal); //suspend threads so we can run
     if ((entry == NULL) || (tid == NULL)){
         return VM_STATUS_ERROR_INVALID_PARAMETER;
     }
     //TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack);
     TVMThreadID thread_id = TCBList::IDCounter;
     TCB NewTCB = TCB(entry, param, prio, globalList.IncrementID(), memsize);
-    //GlobalTCBList.
+    globalList.AddTCB(NewTCB);
     // Add it to the list
+     MachineResumeSignals(GlobalSignal);
     return VM_STATUS_SUCCESS;
     //VMThreadState(tid, running);
 	//Allocate space for thread
