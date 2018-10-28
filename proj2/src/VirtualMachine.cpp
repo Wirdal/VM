@@ -20,7 +20,7 @@ struct TCB {
     TVMThreadState state;
     uint8_t stack; // Not sure if this is correct stack base
     void SetState(TVMThreadState state);
-    TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, uint8_t stack);
+    TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, uint8_t stack);
     // TCB()
 };
 
@@ -229,7 +229,7 @@ TVMStatus VMThreadDelete(TVMThreadID thread){
     }
 };
 
-/*
+/*git p
 VMThreadActivate()activates the dead thread specified by threadparameter in the virtual machine.
 After activation the thread enters the ready state VM_THREAD_STATE_READY, and must begin at the entryfunction specified.
 */
@@ -242,7 +242,7 @@ TVMStatus VMThreadActivate(TVMThreadID thread){
         return VM_STATUS_ERROR_INVALID_STATE;
     }
     else {
-        FoundTCB->SetState(VM_THREAD_STATE_READY)
+        FoundTCB->SetState(VM_THREAD_STATE_READY);
         // Also add it to the list of ready threads
         return VM_STATUS_SUCCESS;
     }
@@ -287,7 +287,7 @@ TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
         return VM_STATUS_ERROR_INVALID_PARAMETER;
     }
     else{
-        stateref = FoundTCB -> state;
+        stateref = FoundTCB -> &state;
         return VM_STATUS_SUCCESS;
     }
 };
