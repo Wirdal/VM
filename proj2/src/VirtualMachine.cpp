@@ -19,6 +19,7 @@ struct TCB {
     TVMThreadState state;
     uint8_t stack_size;
     uint8_t *stack= new uint8_t[stack_size]; // Not sure if this is correct stack base;
+    SMachineContext context;
 
     TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack);
     // TCB()
@@ -92,7 +93,7 @@ void AlarmCallback(void *calldata){
     //calldata - passed into the callback function upon completion of the open file request
     //calldata - received from MachineFileOpen()
     //result - new file descriptor
-        ;
+    ;
 }
 
 
@@ -126,23 +127,7 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
         //Create Idle Thread
         TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
         VMThreadCreate(AlarmCallback, NULL, memorysize,  ((TVMThreadPriority)0x01), &idleID);
-        //VMThreadActivate idle ID
-    
-        //CREATE IDLE THREAD
-        //TVMThreadIDRef idleThreadID;
-
-        std::cout<<"Threads | idle: id"<<"\n";
-        //returns immediated, alrarmcb called by machine
-        //tickms is the param for the AlarmCallback
-        //alarmcb(calldata) - called every tick, callback param can be NULL here
-        //sleeping thread gets decremented / other cases increment all (including sleeping thread)?
-        // MachineRequestAlarm(tickms * 1000, AlarmCallback, NULL);
-
-
-        //machineenablesignals
-        // Just need to pass VMmain its arguements?
-        // Or need to call what is returned
-
+        std::cout<<"Threads | idle"<<"\n";
 
         MachineSuspendSignals(signal);
         entry(argc, argv);
@@ -206,13 +191,41 @@ VMThreadDelete()deletes the dead thread specified by threadparameter from the vi
 TVMStatus VMThreadDelete(TVMThreadID thread){
 
 };
+void skeleton(void *calldata){
+    //calldata - passed into the callback function upon completion of the open file request
+    //calldata - received from MachineFileOpen()
+    //result - new file descriptor
+    ;
+}
 
 /*
 VMThreadActivate()activates the dead thread specified by threadparameter in the virtual machine.
 After activation the thread enters the ready state VM_THREAD_STATE_READY, and must begin at the entryfunction specified.
 */
 TVMStatus VMThreadActivate(TVMThreadID thread){
-	//init context
+    TMachineSignalStateRef signal;
+    MachineSuspendSignals(signal);
+    
+    TCB* FoundTCB = globalList.FindTCB(thread);
+    if (FoundTCB == NULL){
+        return VM_STATUS_ERROR_INVALID_ID;
+    }
+    else if (FoundTCB->state != VM_THREAD_STATE_DEAD){
+        return VM_STATUS_ERROR_INVALID_STATE;
+    }
+    else {
+        FoundTCB->state = VM_THREAD_STATE_READY;
+        MachineContextCreate(&FoundTCB->context,skeleton, FoundTCB, FoundTCB->stack, FoundTCB->stack_size); //Double check last three are correct (refs vs ptr vs data?)
+        //add to ready thread list
+        // Also add it to the list of ready threads
+        MachineResumeSignals(signal);
+        return VM_STATUS_SUCCESS;
+    }
+    
+    //SCHEDULER, decide new thread to be activated over current one.
+    
+    
+
 };
 
 /*

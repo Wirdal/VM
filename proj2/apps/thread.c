@@ -1,4 +1,5 @@
 #include "VirtualMachine.h"
+#include <stdio.h>
 
 #ifndef NULL
 #define NULL    ((void *)0)
@@ -15,6 +16,8 @@ void VMMain(int argc, char *argv[]){
     TVMThreadState VMState;
     VMPrint("VMMain creating thread.\n");
     VMThreadCreate(VMThread, NULL, 0x100000, VM_THREAD_PRIORITY_NORMAL, &VMThreadID);
+    
+    printf("In Thread\n");
     VMPrint("VMMain getting thread state: ");
     VMThreadState(VMThreadID, &VMState);
     switch(VMState){
