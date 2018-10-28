@@ -235,7 +235,7 @@ TVMStatus VMThreadDelete(TVMThreadID thread){
     }
     else {
         // Remove the thread from the scheduler too
-        globalList.RemoveTCB(thread)
+        globalList.RemoveTCB(thread);
         return VM_STATUS_SUCCESS;
     }
 };
