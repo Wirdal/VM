@@ -11,7 +11,6 @@ class VMThread{
 
 }
 */
-TCBList globalList = TCBList();
 struct TCB {
     TVMThreadEntry entry; // Entry point, what function we will point to
     void * param;
@@ -29,12 +28,12 @@ void TCB::SetState(TVMThreadState state){
     state=state;
 }
 
-TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, uint8_t stack){
+TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, uint8_t stack){
     entry = entry;
     ticks = 0; //Not sure about this one
     param = param;
     prio = prio;
-    ThreadID = TCBList::IncrementID(); 
+    ThreadID = 0; // Have to increment youirself
     state = VM_THREAD_STATE_DEAD;
     stack = stack;
 }
@@ -79,6 +78,7 @@ void TCBList::AddTCB(TCB *TCB){
 void TCBList::RemoveTCB(TVMThreadID IDnum){
 
 }
+TCBList globalList = TCBList();
 // std::list <TVMThreadID*> sleepingThreads;
 
 //TA says list necessary, shaky on why, maybe b/c mem non contiguous
