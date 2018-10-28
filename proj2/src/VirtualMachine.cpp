@@ -42,6 +42,7 @@ TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID
 
 // This neeeds to be created ONCE
 struct TCBList{
+    TCB* CurrentTCB;
     std::vector<TCB*> Tlist;
     static TVMThreadID IDCounter;
     TCB* FindTCB(TVMThreadID IDnum);
@@ -51,6 +52,8 @@ struct TCBList{
     void AddTCB(TCB*);
     void RemoveTCB(TVMThreadID IDnum);
     TVMThreadID NextReadyThread();
+    void SetCurrentThread(TCB* CurrentTCB);
+    TCB* GetCurrentTCB();
     TCBList();
     std::vector<TCB*> SleepingThreads;
     std::vector<TCB*> HighReady;
@@ -58,6 +61,14 @@ struct TCBList{
     std::vector<TCB*> LowReady;
 
 };
+
+void TCBList::SetCurrentThread(TCB* CurrentTCB){
+    CurrentTCB = CurrentTCB;
+}
+
+TCB* TCBList::GetCurrentTCB(){
+    return CurrentTCB;
+}
 
 TCB* TCBList::FindTCB(TVMThreadID IDnum){
     for(auto s: Tlist)
@@ -239,7 +250,7 @@ TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsiz
     TCB NewTCB = TCB(entry, param, prio, globalList.IncrementID(), memsize);
     globalList.AddTCB(&NewTCB);
     // Add it to the list
-     MachineResumeSignals(GlobalSignal);
+    MachineResumeSignals(GlobalSignal);
     return VM_STATUS_SUCCESS;
     //VMThreadState(tid, running);
 	//Allocate space for thread
@@ -311,6 +322,7 @@ TVMStatus VMThreadTerminate(TVMThreadID thread){
         return VM_STATUS_ERROR_INVALID_STATE;
     }
     else {
+        // Also need to stop it running
         FoundTCB->SetState(VM_THREAD_STATE_DEAD);
         // Move it to dead
         return VM_STATUS_SUCCESS;
@@ -322,6 +334,8 @@ VMThreadID() puts the thread identifier of the currently running thread in the l
 */
 TVMStatus VMThreadID(TVMThreadIDRef threadref){
     //No idea how to do this one
+    //Needs to be current operating thread?
+    threadref = &globalList.GetCurrentTCB()->ThreadID;
 };
 
 /*
