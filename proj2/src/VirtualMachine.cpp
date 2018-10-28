@@ -11,6 +11,8 @@ class VMThread{
 
 }
 */
+
+TMachineSignalStateRef GlobalSignal;
 struct TCB {
     TVMThreadEntry entry; // Entry point, what function we will point to
     void * param;
