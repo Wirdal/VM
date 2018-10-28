@@ -11,7 +11,7 @@ class VMThread{
 
 }
 */
-TCBList globalList;
+TCBList globalList = TCBList();
 struct TCB {
     TVMThreadEntry entry; // Entry point, what function we will point to
     void * param;
@@ -48,7 +48,7 @@ struct TCBList{
     std::vector<TCB*> GetList();
     static TVMThreadID GetID();
     void AddTCB(TCB*);
-    void RemoveTCB(TVMThreadID IDnum)
+    void RemoveTCB(TVMThreadID IDnum);
     TCBList();
 };
 
@@ -262,7 +262,7 @@ TVMStatus VMThreadTerminate(TVMThreadID thread){
         return VM_STATUS_ERROR_INVALID_STATE;
     }
     else {
-        FoundTCB->SetState(VM_THREAD_STATE_READY)
+        FoundTCB->SetState(VM_THREAD_STATE_READY);
         // Also add it to the list of ready threads
         return VM_STATUS_SUCCESS;
     }
