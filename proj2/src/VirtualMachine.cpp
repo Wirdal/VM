@@ -20,7 +20,7 @@ struct TCB {
     TVMThreadState state;
     uint8_t stack; // Not sure if this is correct stack base
     void SetState(TVMThreadState state);
-    TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, uint8_t stack);
+    TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ID, uint8_t stack);
     // TCB()
 };
 
@@ -28,12 +28,12 @@ void TCB::SetState(TVMThreadState state){
     state=state;
 }
 
-TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, uint8_t stack){
+TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ID, uint8_t stack){
     entry = entry;
     ticks = 0; //Not sure about this one
     param = param;
     prio = prio;
-    ThreadID = 0; // Have to increment youirself
+    ThreadID = ID; // Have to increment youirself
     state = VM_THREAD_STATE_DEAD;
     stack = stack;
 }
@@ -83,10 +83,11 @@ void TCBList::AddTCB(TCB *TCB){
 void TCBList::RemoveTCB(TVMThreadID IDnum){
     int i = 0;
     for(auto s: Tlist)
-        ++i;
         if (s->ThreadID == IDnum){
+            Tlist = std::remove(std::begin(Tlist), std::end(Tlist), s);
+            return;
         }
-    Tlist.erase(i);
+        ++i;
 }
 TCBList globalList = TCBList();
 // std::list <TVMThreadID*> sleepingThreads;
@@ -150,11 +151,9 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
         TVMThreadPriority mainpriority = VM_THREAD_PRIORITY_NORMAL;
 
         //Creates Main thread
-        TCB maintcb = TCB(entry, NULL, mainpriority, maintid, VM_THREAD_STATE_RUNNING, memorysize);
 
         //Creates Idle Thread
         TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
-        VMThreadCreate(AlarmCallback, NULL, memorysize, VM_THREAD_PRIORITY_NORMAL, idleID);
         //VMThreadActivate idle ID
 
         //CREATE IDLE THREAD
@@ -203,7 +202,7 @@ TVMStatus VMTickCount(TVMTickRef tickref){
 };
 
 /*
-VMThreadCreate() creates a thread in the virtual machine.Once created the thread is in the dead stateVM_THREAD_STATE_DEAD.
+VMThreadCreate() creates a thread in the virtual machine.Once created the thread is in the dead state VM_THREAD_STATE_DEAD.
 The entryparameter specifies the function of the thread, and paramspecifies the parameter that is passed to the function.
 The size of the threads stack is specified by memsize, and the priority is specified by prio.
 The thread identifier is put into the location specified by the tidparameter.
@@ -214,7 +213,7 @@ TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsiz
     }
     //TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack);
     TVMThreadID thread_id = TCBList::IDCounter;
-    TCB NewTCB = TCB(entry, param, prio, VM_THREAD_STATE_READY, memsize);
+    TCB NewTCB = TCB(entry, param, prio, globalList.IncrementID(), memsize);
     //GlobalTCBList.
     // Add it to the list
     return VM_STATUS_SUCCESS;
@@ -245,16 +244,31 @@ VMThreadActivate()activates the dead thread specified by threadparameter in the 
 After activation the thread enters the ready state VM_THREAD_STATE_READY, and must begin at the entryfunction specified.
 */
 TVMStatus VMThreadActivate(TVMThreadID thread){
+    MachineSuspendSignals(GlobalSignal);
 	TCB* FoundTCB = globalList.FindTCB(thread);
     if (FoundTCB == NULL){
+        MachineResumeSignals(GlobalSignal);
         return VM_STATUS_ERROR_INVALID_ID;
     }
     else if (FoundTCB->state != VM_THREAD_STATE_DEAD){
+        MachineResumeSignals(GlobalSignal);
         return VM_STATUS_ERROR_INVALID_STATE;
     }
     else {
         FoundTCB->SetState(VM_THREAD_STATE_READY);
-        // Also add it to the list of ready threads
+        switch (FoundTCB->prio)
+        {
+            case VM_THREAD_PRIORITY_LOW:
+                globalList.LowReady.push_back(FoundTCB);
+                break;
+            case VM_THREAD_PRIORITY_NORMAL:
+                globalList.MediumReady.push_back(FoundTCB);
+                break;
+            case VM_THREAD_PRIORITY_HIGH:
+                globalList.HighReady.push_back(FoundTCB);
+                break;
+        }
+        MachineResumeSignals(GlobalSignal);
         return VM_STATUS_SUCCESS;
     }
 };
