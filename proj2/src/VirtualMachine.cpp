@@ -44,11 +44,11 @@ TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID
 struct TCBList{
     TCB* CurrentTCB;
     std::vector<TCB*> Tlist;
-    static TVMThreadID IDCounter;
+    TVMThreadID IDCounter;
     TCB* FindTCB(TVMThreadID IDnum);
-    static TVMThreadID IncrementID();
+    TVMThreadID IncrementID();
     std::vector<TCB*> GetList();
-    static TVMThreadID GetID();
+    TVMThreadID GetID();
     void AddTCB(TCB*);
     void RemoveTCB(TVMThreadID IDnum);
     TVMThreadID NextReadyThread();
