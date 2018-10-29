@@ -252,6 +252,19 @@ void VMThread(void *param){
     MachineResumeSignals(signalref);
     
 }
+
+
+void EmptyThreadCallback(void *calldata){
+    //calldata - passed into the callback function upon completion of the open file request
+    //calldata - received from MachineFileOpen()
+    //result - new file descriptor
+    ;
+}
+void skeleton(void *param){     //we use this to switch to the correct context
+   // MachineEnableSignals();
+    //param->entry
+}
+
 TVMStatus VMStart(int tickms, int argc, char *argv[]){
     std::cout<<"/VMStart"<<"\n";
     VMPrint("Machine not initialized, will not print\n"); //wont print
@@ -274,65 +287,25 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     //TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
     TVMThreadID idleID;
     TVMThreadID maintid = 0;
-    
-    //Create main thread, but we don't want to disable signal
-    
-    /*
-     std::cout<<"/Create VMTHREAD Thread"<<"\n";
-     VMPrint("*VM creating Example thread\n");
-     TVMThreadID VMThreadID1;
-     
-     VMThreadCreate(VMThread, NULL, 0x100000, VM_THREAD_PRIORITY_NORMAL, &VMThreadID1);
-     VMThreadActivate(VMThreadID1);
-     TVMThreadState VMState = VM_THREAD_STATE_READY;
-     
-     TCB* FoundTCB = globalList.FindTCB(VMThreadID1);
-     if (FoundTCB == NULL){
-     VMPrint("NO TCB ex\n");
-     MachineResumeSignals(GlobalSignal);
-     return VM_STATUS_ERROR_INVALID_ID;
-     }
-     else{VMPrint("TCB FOUND ex\n");}
-     
-     VMPrint("VMThread State: ");
-     switch(VMState){
-     case VM_THREAD_STATE_DEAD:       VMPrint("DEAD\n");
-     break;
-     case VM_THREAD_STATE_RUNNING:    VMPrint("RUNNING\n");
-     break;
-     case VM_THREAD_STATE_READY:      VMPrint("READY\n");
-     break;
-     case VM_THREAD_STATE_WAITING:    VMPrint("WAITING\n");
-     break;
-     default:                        break;
-     }
-     std::cout<<"/Activate VMTHREAD Thread"<<"\n";
-     VMPrint("VMThread activate\n");
-     VMThreadActivate(VMThreadID1);
-     */
     TVMMemorySize memorysize = 0x100000;
-    
+
     //main thread
     //id - 0 (we don't use VMThreadCreate so that id can be 0)
     std::cout<<"\n";
     std::cout<<"/Create main Thread"<<"\n";
     VMPrint("VM creating main thread\n");
     TVMThreadPriority mainpriority = VM_THREAD_PRIORITY_NORMAL;
-    TCB *maintcb = new TCB(IdleCallback, NULL, mainpriority, maintid, memorysize);
+    TCB *maintcb = new TCB(EmptyThreadCallback, NULL, mainpriority, maintid, memorysize);
     globalList.AddTCB(maintcb);
     
-    
-    
     //Idle Thread
-    //id = 1 - always
+    //id = 1
     //TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
     // TVMThreadPriority 0x00 -> lower than low (0x01)
     std::cout<<"/Create idle Thread"<<"\n";
     VMPrint("VM creating idle thread\n");
     VMThreadCreate(IdleCallback, NULL, memorysize,  ((TVMThreadPriority)0x00), &idleID);
     TCB* IdleTCB = globalList.FindTCB(1);
-    
-    
     
     // MachineContextCreate(globalList.FindTCB(thread)->TCBcontext, IdleCallback, NULL,  globalList.FindTCB(thread)->stackaddr,0x100000);
     
@@ -349,7 +322,17 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     
 };
 
-
+void scheduler(){
+    //access our lists of priority
+    //figure out what should be running
+    //set it to running
+    //old thread should be those in ready state, new context should be those in running state
+    
+    
+    //get thread going to last of global lists
+    TVMThreadID thread = 1; //test placeholder
+    MachineContextSwitch(globalList.FindTCB(thread - 1)->TCBcontext,globalList.FindTCB(thread)->TCBcontext);
+}
 /*!
  VMTickMS() puts tick time interval in milliseconds in the location specified by tickmsref.
  This is the value tickmsfrom the previous call to VMStart().
@@ -470,7 +453,6 @@ TVMStatus VMThreadActivate(TVMThreadID thread){
             default:
                 VMPrint("no prio\n");
                 break;
-                
         }
         // globalList.FindTCB(thread)->state = VM_THREAD_STATE_READY;
         //FoundTCB->state = VM_THREAD_STATE_READY;
@@ -490,7 +472,7 @@ TVMStatus VMThreadActivate(TVMThreadID thread){
                 
         }
         //switch old to new
-        MachineContextSwitch(globalList.FindTCB(thread - 1)->TCBcontext,globalList.FindTCB(thread)->TCBcontext);
+        scheduler();
         MachineResumeSignals(signalref);
         return VM_STATUS_SUCCESS;
     }
