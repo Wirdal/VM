@@ -23,17 +23,17 @@ struct TCB {
 };
 
 //Sets the state of the thread
-void TCB::SetState(TVMThreadState state){
-    state=state;
+void TCB::SetState(TVMThreadState pstate){
+    state=pstate;
 }
 
-void TCB::SetTicks(TVMTick ticks){
-	ticks = ticks;
+void TCB::SetTicks(TVMTick pticks){
+	ticks = pticks;
 }
 void TCB::DecrementTicks(){
     ticks = ticks - 1;
 }
-//The constructor for the TCB. 
+//The constructor for the TCB.
 TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ID, uint8_t stack){
     entry = entry;
     ticks = 0; //Not sure about this one
@@ -48,6 +48,7 @@ TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID
 // TCB::~TCB(){
 //     delete stack;
 // }
+TVMThreadID IDCounter = 0;
 struct TCBList{
     TCB* CurrentTCB;
     std::vector<TCB*> Tlist;
@@ -64,6 +65,7 @@ struct TCBList{
     void RemoveFromReady(TVMThreadID IDnum);
     void RemoveFromReady(TCB* PassedTCB);
     void AddToReady(TCB*);
+    void Schedule();
     TCB* GetCurrentTCB();
     std::vector<TCB*> SleepingThreads;
     std::vector<TCB*> HighReady;
@@ -93,7 +95,7 @@ void TCBList::SleepTimerCountdown(){
         if (s-> ticks != 0){
             s->DecrementTicks();
         }
-    for(auto s: SleepingThreads) 
+    for(auto s: SleepingThreads)
         if (s -> ticks == 0){
             AddToReady(s);
         }
@@ -205,7 +207,11 @@ TVMThreadID TCBList::NextReadyThread(){
         return HighReady[0]->ThreadID;
     }
 }
-
+void TCBList::Schedule(){
+    TVMThreadID NextReadyID = NextReadyThread();
+    RemoveFromReady(NextReadyID);
+    SetCurrentThread(NextReadyID);
+}
 TVMThreadID TCBList::GetID(){
     return IDCounter;
 }
@@ -241,7 +247,7 @@ TCBList globalList = TCBList();
 
 /*
  void TCB::TCB(){
- 
+
  }
  */
 extern "C" {
@@ -285,19 +291,19 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     else{
         //std::cout << "Loaded module \n";
     }
-    
+
     //create idle and main threads
     //idle
-    
+
     //TVMThreadEntry tentry = *argv[0];
     TVMThreadEntry tentry = NULL;
-    
+
     //Creates Main thread
-    
+
     //Creates Idle Thread
     TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
-    
-    
+
+
     //Create main thread, but we don't want to disable signal
     std::cout<<"Create main Thread"<<"\n";
     TVMThreadID maintid;
@@ -319,7 +325,7 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     MachineTerminate();
     VMUnloadModule();
     return VM_STATUS_SUCCESS;
-    
+
 };
 
 
@@ -340,7 +346,13 @@ TVMStatus VMTickMS(int *tickmsref){
  VMTickCount() puts the number of ticks that have occurred since the start of the virtual machine in the location specified by tickref.
  */
 TVMStatus VMTickCount(TVMTickRef tickref){
-    
+    if (tickref == NULL){
+        return VM_STATUS_ERROR_INVALID_PARAMETER;
+    }
+    else {
+        //code
+        return VM_STATUS_SUCCESS;
+    }
 };
 
 /*
@@ -350,7 +362,6 @@ TVMStatus VMTickCount(TVMTickRef tickref){
  The thread identifier is put into the location specified by the tidparameter.
  */
 TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
-    std::cout<<"VMThreadCreate"<<"\n";
     MachineSuspendSignals(GlobalSignal); //suspend threads so we can run
     if ((entry == NULL) || (tid == NULL)){
         return VM_STATUS_ERROR_INVALID_PARAMETER;
@@ -360,7 +371,6 @@ TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsiz
     globalList.AddTCB(&NewTCB);
     // Add it to the list
     MachineResumeSignals(GlobalSignal);
-    std::cout << "TID " << *tid << "\n";
     return VM_STATUS_SUCCESS;
     //VMThreadState(tid, running);
     //Allocate space for thread
@@ -378,7 +388,8 @@ TVMStatus VMThreadDelete(TVMThreadID thread){
         return VM_STATUS_ERROR_INVALID_STATE;
     }
     else {
-        // Remove the thread from the scheduler too
+        // Remove the thread from the scheduler too?
+        // No/ BC the thread should be dead
         globalList.RemoveTCB(thread);
         return VM_STATUS_SUCCESS;
     }
@@ -389,7 +400,6 @@ TVMStatus VMThreadDelete(TVMThreadID thread){
  After activation the thread enters the ready state VM_THREAD_STATE_READY, and must begin at the entryfunction specified.
  */
 TVMStatus VMThreadActivate(TVMThreadID thread){
-    std::cout<<"VMThreadActivate"<<"\n";
     MachineSuspendSignals(GlobalSignal);
     TCB* FoundTCB = globalList.FindTCB(thread);
     if (FoundTCB == NULL){
@@ -423,9 +433,12 @@ TVMStatus VMThreadTerminate(TVMThreadID thread){
     }
     else {
         // Also need to stop it running
+        globalList.RemoveFromReady(FoundTCB);
         FoundTCB->SetState(VM_THREAD_STATE_DEAD);
+        //Schedule it
+        globalList.Schedule();
         // Move it to dead
-        
+
         return VM_STATUS_SUCCESS;
     }
 };
@@ -434,9 +447,13 @@ TVMStatus VMThreadTerminate(TVMThreadID thread){
  VMThreadID() puts the thread identifier of the currently running thread in the location specified by threadref.
  */
 TVMStatus VMThreadID(TVMThreadIDRef threadref){
+    if (threadref == NULL){
+        return VM_STATUS_ERROR_INVALID_PARAMETER;
+    }
     //No idea how to do this one
     //Needs to be current operating thread?
     threadref = &globalList.GetCurrentTCB()->ThreadID;
+    return VM_STATUS_SUCCESS;
 };
 
 /*
@@ -465,12 +482,16 @@ void MachineAlarmCallback(void * calldata){
 }
 
 TVMStatus VMThreadSleep(TVMTick tick){
+    if (tick == VM_TIMEOUT_INFINITE){
+        return VM_STATUS_ERROR_INVALID_PARAMETER;
+    }
     MachineSuspendSignals(GlobalSignal);
     globalList.CurrentTCB->SetTicks(tick*1000);
     globalList.RemoveFromReady(globalList.CurrentTCB);
     globalList.AddSleeper();
     MachineRequestAlarm(tick, MachineAlarmCallback, NULL);
     MachineResumeSignals(GlobalSignal);
+    return VM_STATUS_SUCCESS;
 
 };
 
@@ -497,14 +518,9 @@ TVMStatus VMFileOpen(const char *filename, int flags, int mode, int *filedescrip
     MachineSuspendSignals(state);
     MachineFileOpen(filename, flags, mode, FileDescriptorCallback, filedescriptor);
     MachineResumeSignals(state);
-    
+    return VM_STATUS_SUCCESS;
+
 };
-void EmptyCallback2(void *calldata, int result){
-    //calldata - passed into the callback function upon completion of the open file request
-    //calldata - received from MachineFileOpen()
-    //result - new file descriptor
-    ;
-}
 
 /*
  VMFileClose() closes a file previously opened with a call to VMFileOpen().
@@ -512,6 +528,7 @@ void EmptyCallback2(void *calldata, int result){
  */
 TVMStatus VMFileClose(int filedescriptor){
     MachineFileClose(filedescriptor, EmptyCallback2, NULL);
+    // Need to check if it succeeds
 };
 
 /*
@@ -520,6 +537,10 @@ TVMStatus VMFileClose(int filedescriptor){
  When a thread calls VMFileRead() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful reading of the file is completed.
  */
 TVMStatus VMFileRead(int filedescriptor, void *data, int *length){
+    if ((data==NULL) ||(length == NULL)){
+        return VM_STATUS_ERROR_INVALID_PARAMETER;
+    }
+    //Need to check if we succeed or fail
 };
 
 /*
@@ -537,13 +558,17 @@ void EmptyCallback(void *calldata, int result){
 }
 
 TVMStatus VMFileWrite(int filedescriptor, void *data, int *length){
+    MachineSuspendSignals(GlobalSignal);
+    if ((data==NULL) ||(length == NULL)){
+        return VM_STATUS_ERROR_INVALID_PARAMETER;
+    }
     //Just a call to other things?
     //TMachineFileCallback callback;
     //get filedescriptor from VMFILEOPEN()
     //void *data;
     //Suspend signals before here? Don't want race
     MachineFileWrite(filedescriptor, data, *length, EmptyCallback, NULL);
-    
+    MachineResumeSignals(GlobalSignal);
 };
 
 /*
@@ -552,7 +577,7 @@ TVMStatus VMFileWrite(int filedescriptor, void *data, int *length){
  When a thread calls VMFileSeek() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful seeking inthe file is completed.
  */
 TVMStatus VMFileSeek(int filedescriptor, int offset, int whence, int *newoffset){
-    
+    //Check for success or failure
 };
 
 #define VMPrint(format, ...)        VMFilePrint ( 1,  format, ##__VA_ARGS__)
