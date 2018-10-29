@@ -24,7 +24,10 @@ struct TCB {
     void SetState(TVMThreadState state);
     TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ID, uint8_t stack);
     ~TCB();
+<<<<<<< HEAD
     // TCB()
+=======
+>>>>>>> 2f1c2d2df7441659c352dbf25c52553a0330c1b7
 };
 
 void TCB::SetState(TVMThreadState state){
@@ -45,6 +48,9 @@ TCB::~TCB(){
     delete stack;
 }
 // This neeeds to be created ONCE
+TCB::~TCB(){
+    delete stack;
+}
 struct TCBList{
     TCB* CurrentTCB;
     std::vector<TCB*> Tlist;
@@ -174,38 +180,27 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 
         //create idle and main threads
         //idle
-        unsigned int* maintid;
-        TVMMemorySize memorysize = 0x100000;
+    
         //TVMThreadEntry tentry = *argv[0];
         TVMThreadEntry tentry = NULL;
-
-        //mainetry = entry;
-
-        //TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack);
-        // TCB()
-        TVMThreadPriority mainpriority = VM_THREAD_PRIORITY_NORMAL;
 
         //Creates Main thread
 
         //Creates Idle Thread
-        TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
-        //VMThreadActivate idle ID
+    TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
 
-        //CREATE IDLE THREAD
-        //TVMThreadIDRef idleThreadID;
     
-        std::cout<<"Threads | idle: id"<<"\n";
-        //returns immediated, alrarmcb called by machine
-        //tickms is the param for the AlarmCallback
-        //alarmcb(calldata) - called every tick, callback param can be NULL here
-        //sleeping thread gets decremented / other cases increment all (including sleeping thread)?
-        // MachineRequestAlarm(tickms * 1000, AlarmCallback, NULL);
-
-
-        //machineenablesignals
-	// Just need to pass VMmain its arguements?
-	// Or need to call what is returned
-
+    //Create main thread, but we don't want to disable signal
+    TVMThreadID maintid;
+    TVMMemorySize memorysize = 0x100000;
+    TVMThreadPriority mainpriority = VM_THREAD_PRIORITY_NORMAL;
+    TCB *maintcb = new TCB(AlarmCallback, NULL, mainpriority, maintid, memorysize);
+    globalList.AddTCB(maintcb);
+    
+    //Create Idle Thread
+    //TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
+    VMThreadCreate(AlarmCallback, NULL, memorysize,  ((TVMThreadPriority)0x01), &idleID);
+    std::cout<<"Threads | idle"<<"\n";
 
     MachineEnableSignals();
 	entry(argc, argv);
