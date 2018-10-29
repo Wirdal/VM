@@ -13,6 +13,7 @@ class VMThread{
 */
 
 TMachineSignalStateRef GlobalSignal;
+// The Thread control block. One is made for each thread
 struct TCB {
     TVMThreadEntry entry; // Entry point, what function we will point to
     void * param;
@@ -23,26 +24,29 @@ struct TCB {
     uint8_t *stack; // Not sure if this is correct stack base
     void SetState(TVMThreadState state);
     TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ID, uint8_t stack);
-    ~TCB();
+    //~TCB();
 };
 
+//Sets the state of the thread
 void TCB::SetState(TVMThreadState state){
     state=state;
 }
 
+//The constructor for the TCB. 
 TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ID, uint8_t stack){
     entry = entry;
     ticks = 0; //Not sure about this one
     param = param;
     prio = prio;
-    ThreadID = ID; // Have to increment youirself
+    ThreadID = ID; // Have to increment locally. This is already done
     state = VM_THREAD_STATE_DEAD;
     stack = *new uint8_t[stack];
 }
-
-TCB::~TCB(){
-    delete stack;
-}
+//Deconstructor for a thread control block. Is meant to free memory up
+// Not sure if it works rigth now though
+// TCB::~TCB(){
+//     delete stack;
+// }
 struct TCBList{
     TCB* CurrentTCB;
     std::vector<TCB*> Tlist;
@@ -55,15 +59,28 @@ struct TCBList{
     void RemoveTCB(TVMThreadID IDnum);
     TVMThreadID NextReadyThread();
     void SetCurrentThread(TCB* CurrentTCB);
+    void SetCurrentThread(TVMThreadID ID);
+    void RemoveFromReady(TVMThreadID IDnum);
     TCB* GetCurrentTCB();
     std::vector<TCB*> SleepingThreads;
     std::vector<TCB*> HighReady;
     std::vector<TCB*> MediumReady;
     std::vector<TCB*> LowReady;
+    void AddSleeper();
 };
+
+//Tells the current thread to go to sleep.
+void TCBList::AddSleeper(){
+    SleepingThreads.push_back(CurrentTCB);
+    RemoveFromReady(CurrentTCB->ThreadID);
+
+}
 
 void TCBList::SetCurrentThread(TCB* CurrentTCB){
     CurrentTCB = CurrentTCB;
+}
+void TCBList::SetCurrentThread(TVMThreadID ID){
+    CurrentTCB = FindTCB(ID);
 }
 
 TCB* TCBList::GetCurrentTCB(){
@@ -82,9 +99,37 @@ TVMThreadID TCBList::IncrementID() {
     return IDCounter = IDCounter + 1;
 }
 
+void TCBList::RemoveFromReady(TVMThreadID IDnum){
+    if (CurrentTCB->ThreadID == IDnum){
+        CurrentTCB = NULL;
+    }
+    int i = 0;
+    for(auto s: LowReady)
+        if (s->ThreadID == IDnum){
+            LowReady.erase(LowReady.begin()+ i); // Need to remove it from the schedular as well?
+            return;
+        }
+        ++i;
+    i = 0;
+    for(auto s: MediumReady)
+        if (s->ThreadID == IDnum){
+            MediumReady.erase(MediumReady.begin()+ i); // Need to remove it from the schedular as well?
+            return;
+        }
+        ++i;
+    int i = 0;
+    for(auto s: HighReady)
+        if (s->ThreadID == IDnum){
+            HighReady.erase(HighReady.begin()+ i); // Need to remove it from the schedular as well?
+            return;
+        }
+        ++i;
+}
+
 TVMThreadID TCBList::NextReadyThread(){
     //Finds the next ready thread in the schedular
     // Returns the ID to it
+    //Also removes the thread from the block
     if (HighReady.empty()) {
         if (MediumReady.empty()){
             if (LowReady.empty()){
@@ -102,6 +147,7 @@ TVMThreadID TCBList::NextReadyThread(){
         return HighReady[0]->ThreadID;
     }
 }
+
 TVMThreadID TCBList::GetID(){
     return IDCounter;
 }
@@ -115,6 +161,10 @@ void TCBList::AddTCB(TCB *TCB){
 }
 
 void TCBList::RemoveTCB(TVMThreadID IDnum){
+    // Removes the current running thread if it is the one
+    if (CurrentTCB->ThreadID == IDnum){
+        CurrentTCB = NULL;
+    }
     int i = 0;
     for(auto s: Tlist)
         if (s->ThreadID == IDnum){
@@ -348,6 +398,8 @@ VMThreadSleep() puts the currently running thread to sleep for tickticks.
 If tick is specified as VM_TIMEOUT_IMMEDIATEthe current process yields the remainder of its processing quantum to the next ready process of equal priority.
 */
 TVMStatus VMThreadSleep(TVMTick tick){
+
+
 
 };
 
