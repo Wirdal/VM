@@ -6,11 +6,11 @@
 #include <algorithm>
 
 /*
-class VMThread{
-    //MachineContextCreate() //what args to pass?
-
-}
-*/
+ class VMThread{
+ //MachineContextCreate() //what args to pass?
+ 
+ }
+ */
 
 TMachineSignalStateRef GlobalSignal;
 // The Thread control block. One is made for each thread
@@ -32,7 +32,7 @@ void TCB::SetState(TVMThreadState state){
     state=state;
 }
 
-//The constructor for the TCB. 
+//The constructor for the TCB.
 TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ID, uint8_t stack){
     entry = entry;
     ticks = 0; //Not sure about this one
@@ -73,7 +73,7 @@ struct TCBList{
 void TCBList::AddSleeper(){
     SleepingThreads.push_back(CurrentTCB);
     RemoveFromReady(CurrentTCB->ThreadID);
-
+    
 }
 
 void TCBList::SetCurrentThread(TCB* CurrentTCB){
@@ -109,21 +109,21 @@ void TCBList::RemoveFromReady(TVMThreadID IDnum){
             LowReady.erase(LowReady.begin()+ i); // Need to remove it from the schedular as well?
             return;
         }
-        ++i;
+    ++i;
     i = 0;
     for(auto s: MediumReady)
         if (s->ThreadID == IDnum){
             MediumReady.erase(MediumReady.begin()+ i); // Need to remove it from the schedular as well?
             return;
         }
-        ++i;
-    int i = 0;
+    ++i;
+    i = 0;
     for(auto s: HighReady)
         if (s->ThreadID == IDnum){
             HighReady.erase(HighReady.begin()+ i); // Need to remove it from the schedular as well?
             return;
         }
-        ++i;
+    ++i;
 }
 
 TVMThreadID TCBList::NextReadyThread(){
@@ -171,7 +171,7 @@ void TCBList::RemoveTCB(TVMThreadID IDnum){
             Tlist.erase(Tlist.begin()+ i); // Need to remove it from the schedular as well?
             return;
         }
-        ++i;
+    ++i;
 }
 TCBList globalList = TCBList();
 // std::list <TVMThreadID*> sleepingThreads;
@@ -182,57 +182,66 @@ TCBList globalList = TCBList();
 
 
 /*
-void TCB::TCB(){
-
-}
-*/
+ void TCB::TCB(){
+ 
+ }
+ */
 extern "C" {
-        //typedef void (*TVMMainEntry)(int, char*[]);  //This is why were couldn't access the fn in main LOL
- 	TVMMainEntry VMLoadModule(const char *module);
-	void VMUnloadModule(void);
-	TVMStatus VMFilePrint(int filedescriptor, const char *format, ...);
+    //typedef void (*TVMMainEntry)(int, char*[]);  //This is why were couldn't access the fn in main LOL
+    TVMMainEntry VMLoadModule(const char *module);
+    void VMUnloadModule(void);
+    TVMStatus VMFilePrint(int filedescriptor, const char *format, ...);
 }
 
 void AlarmCallback(void *calldata){
     //calldata - passed into the callback function upon completion of the open file request
     //calldata - received from MachineFileOpen()
     //result - new file descriptor
-        ;
+    ;
 }
 
 
 
 /*!
-VMStart() starts the virtual machine by loading the module specified by argv [0]. The argc and argv
-are passed directly into the VMMain() function that exists in the loaded module. The time
-in milliseconds of the virtual machine tick is specified by the tickms parameter.
-*/
+ VMStart() starts the virtual machine by loading the module specified by argv [0]. The argc and argv
+ are passed directly into the VMMain() function that exists in the loaded module. The time
+ in milliseconds of the virtual machine tick is specified by the tickms parameter.
+ */
+void IdleCallback(void *calldata){
+    std::cout<<"In Idle"<<"\n";
+    MachineEnableSignals();
+    while(1){
+        std::cout<<"In Idle"<<"\n";
+    }
+    ;
+}
 TVMStatus VMStart(int tickms, int argc, char *argv[]){
-
-	// Returns Null if fails to load
-	MachineInitialize();
-	MachineEnableSignals();
-	TVMMainEntry entry = VMLoadModule(argv[0]);
-	if (entry == NULL) {
-		std::cout << "Failed to load \n";
-	}
-	else{
-		//std::cout << "Loaded module \n";
-	}
-
-        //create idle and main threads
-        //idle
+    std::cout<<"VMStart"<<"\n";
+    // Returns Null if fails to load
+    MachineInitialize();
+    MachineEnableSignals();
+    TVMMainEntry entry = VMLoadModule(argv[0]);
+    if (entry == NULL) {
+        std::cout << "Failed to load \n";
+    }
+    else{
+        //std::cout << "Loaded module \n";
+    }
     
-        //TVMThreadEntry tentry = *argv[0];
-        TVMThreadEntry tentry = NULL;
-
-        //Creates Main thread
-
-        //Creates Idle Thread
+    //create idle and main threads
+    //idle
+    
+    //TVMThreadEntry tentry = *argv[0];
+    TVMThreadEntry tentry = NULL;
+    
+    //Creates Main thread
+    
+    //Creates Idle Thread
     TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
-
+    
     
     //Create main thread, but we don't want to disable signal
+    std::cout<<"Create main Thread"<<"\n";
     TVMThreadID maintid;
     TVMMemorySize memorysize = 0x100000;
     TVMThreadPriority mainpriority = VM_THREAD_PRIORITY_NORMAL;
@@ -241,22 +250,26 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     
     //Create Idle Thread
     //TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
-    VMThreadCreate(AlarmCallback, NULL, memorysize,  ((TVMThreadPriority)0x01), &idleID);
-    std::cout<<"Threads | idle"<<"\n";
-
+    // TVMThreadPriority 0x00 -> lower than low (0x01)
+    std::cout<<"Create idle Thread"<<"\n";
+    VMThreadCreate(IdleCallback, NULL, memorysize,  ((TVMThreadPriority)0x00), &idleID);
+    std::cout<<"Activate idle Thread"<<"\n";
+    VMThreadActivate(idleID);
+    
+    
     MachineEnableSignals();
-	entry(argc, argv);
-	MachineTerminate();
-	VMUnloadModule();
-	return VM_STATUS_SUCCESS;
-
+    entry(argc, argv);
+    MachineTerminate();
+    VMUnloadModule();
+    return VM_STATUS_SUCCESS;
+    
 };
 
 
 /*!
-VMTickMS() puts tick time interval in milliseconds in the location specified by tickmsref.
-This is the value tickmsfrom the previous call to VMStart().
-*/
+ VMTickMS() puts tick time interval in milliseconds in the location specified by tickmsref.
+ This is the value tickmsfrom the previous call to VMStart().
+ */
 TVMStatus VMTickMS(int *tickmsref){
     if(tickmsref){
         return VM_STATUS_SUCCESS;
@@ -267,19 +280,20 @@ TVMStatus VMTickMS(int *tickmsref){
 };
 
 /*
-VMTickCount() puts the number of ticks that have occurred since the start of the virtual machine in the location specified by tickref.
-*/
+ VMTickCount() puts the number of ticks that have occurred since the start of the virtual machine in the location specified by tickref.
+ */
 TVMStatus VMTickCount(TVMTickRef tickref){
-
+    
 };
 
 /*
-VMThreadCreate() creates a thread in the virtual machine.Once created the thread is in the dead state VM_THREAD_STATE_DEAD.
-The entryparameter specifies the function of the thread, and paramspecifies the parameter that is passed to the function.
-The size of the threads stack is specified by memsize, and the priority is specified by prio.
-The thread identifier is put into the location specified by the tidparameter.
-*/
+ VMThreadCreate() creates a thread in the virtual machine.Once created the thread is in the dead state VM_THREAD_STATE_DEAD.
+ The entryparameter specifies the function of the thread, and paramspecifies the parameter that is passed to the function.
+ The size of the threads stack is specified by memsize, and the priority is specified by prio.
+ The thread identifier is put into the location specified by the tidparameter.
+ */
 TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
+    std::cout<<"VMThreadCreate"<<"\n";
     MachineSuspendSignals(GlobalSignal); //suspend threads so we can run
     if ((entry == NULL) || (tid == NULL)){
         return VM_STATUS_ERROR_INVALID_PARAMETER;
@@ -291,12 +305,12 @@ TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsiz
     MachineResumeSignals(GlobalSignal);
     return VM_STATUS_SUCCESS;
     //VMThreadState(tid, running);
-	//Allocate space for thread
+    //Allocate space for thread
 };
 
 /*
-VMThreadDelete()deletes the dead thread specified by threadparameter from the virtual machine.
-*/
+ VMThreadDelete()deletes the dead thread specified by threadparameter from the virtual machine.
+ */
 TVMStatus VMThreadDelete(TVMThreadID thread){
     TCB* FoundTCB = globalList.FindTCB(thread);
     if (FoundTCB == NULL){
@@ -313,12 +327,13 @@ TVMStatus VMThreadDelete(TVMThreadID thread){
 };
 
 /*
-VMThreadActivate()activates the dead thread specified by threadparameter in the virtual machine.
-After activation the thread enters the ready state VM_THREAD_STATE_READY, and must begin at the entryfunction specified.
-*/
+ VMThreadActivate()activates the dead thread specified by threadparameter in the virtual machine.
+ After activation the thread enters the ready state VM_THREAD_STATE_READY, and must begin at the entryfunction specified.
+ */
 TVMStatus VMThreadActivate(TVMThreadID thread){
+    std::cout<<"VMThreadActivate"<<"\n";
     MachineSuspendSignals(GlobalSignal);
-	TCB* FoundTCB = globalList.FindTCB(thread);
+    TCB* FoundTCB = globalList.FindTCB(thread);
     if (FoundTCB == NULL){
         MachineResumeSignals(GlobalSignal);
         return VM_STATUS_ERROR_INVALID_ID;
@@ -347,10 +362,10 @@ TVMStatus VMThreadActivate(TVMThreadID thread){
 };
 
 /*
-VMThreadTerminate()terminates the thread specified by threadparameter in the virtual machine.
-After termination the thread entersthe state VM_THREAD_STATE_DEAD.
-The termination of a thread can triMachineFileWritegger another thread to be scheduled.
-*/
+ VMThreadTerminate()terminates the thread specified by threadparameter in the virtual machine.
+ After termination the thread entersthe state VM_THREAD_STATE_DEAD.
+ The termination of a thread can triMachineFileWritegger another thread to be scheduled.
+ */
 TVMStatus VMThreadTerminate(TVMThreadID thread){
     TCB* FoundTCB = globalList.FindTCB(thread);
     if (FoundTCB == NULL){
@@ -368,8 +383,8 @@ TVMStatus VMThreadTerminate(TVMThreadID thread){
 };
 
 /*
-VMThreadID() puts the thread identifier of the currently running thread in the location specified by threadref.
-*/
+ VMThreadID() puts the thread identifier of the currently running thread in the location specified by threadref.
+ */
 TVMStatus VMThreadID(TVMThreadIDRef threadref){
     //No idea how to do this one
     //Needs to be current operating thread?
@@ -377,8 +392,8 @@ TVMStatus VMThreadID(TVMThreadIDRef threadref){
 };
 
 /*
-VMThreadState() retrieves the state of the thread specified by threadand places the state in the location specified by state.
-*/
+ VMThreadState() retrieves the state of the thread specified by threadand places the state in the location specified by state.
+ */
 TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
     TCB* FoundTCB = globalList.FindTCB(thread);
     if (FoundTCB == NULL){
@@ -394,94 +409,94 @@ TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
 };
 
 /*
-VMThreadSleep() puts the currently running thread to sleep for tickticks.
-If tick is specified as VM_TIMEOUT_IMMEDIATEthe current process yields the remainder of its processing quantum to the next ready process of equal priority.
-*/
+ VMThreadSleep() puts the currently running thread to sleep for tickticks.
+ If tick is specified as VM_TIMEOUT_IMMEDIATEthe current process yields the remainder of its processing quantum to the next ready process of equal priority.
+ */
 TVMStatus VMThreadSleep(TVMTick tick){
-
-
-
+    
+    
+    
 };
 
 /*
-VMFileOpen()attempts to open the file specified by filename, using the flags specified by flagsparameter, and mode specified by modeparameter.
-The file descriptor of the newly opened file will be placed in the location specified by filedescriptor.
-The flags and mode values follow the same format as that of open system call.
-The filedescriptor returned can be used in subsequent calls to VMFileClose(), VMFileRead(), VMFileWrite(), and VMFileSeek().
-When a thread calls VMFileOpen() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful opening of the file is completed.
-*/
+ VMFileOpen()attempts to open the file specified by filename, using the flags specified by flagsparameter, and mode specified by modeparameter.
+ The file descriptor of the newly opened file will be placed in the location specified by filedescriptor.
+ The flags and mode values follow the same format as that of open system call.
+ The filedescriptor returned can be used in subsequent calls to VMFileClose(), VMFileRead(), VMFileWrite(), and VMFileSeek().
+ When a thread calls VMFileOpen() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful opening of the file is completed.
+ */
 void FileDescriptorCallback(void* calldata, int result){
-	// Used as a callback to get the FD from the machinefileopen
-	std::cout << "result here " << result << "\n";
-	calldata = &result;
+    // Used as a callback to get the FD from the machinefileopen
+    std::cout << "result here " << result << "\n";
+    calldata = &result;
 }
 
 TVMStatus VMFileOpen(const char *filename, int flags, int mode, int *filedescriptor){
-	TMachineSignalStateRef state;
-	if ((filename == NULL) || (filedescriptor == NULL)){
-		std::cout << "Invalid FD | filename" << '\n';
-		return VM_STATUS_ERROR_INVALID_PARAMETER;
-	}
-	std::cout << "Calling machine file open" << '\n';
-	MachineSuspendSignals(state);
-	MachineFileOpen(filename, flags, mode, FileDescriptorCallback, filedescriptor);
-	MachineResumeSignals(state);
-
+    TMachineSignalStateRef state;
+    if ((filename == NULL) || (filedescriptor == NULL)){
+        std::cout << "Invalid FD | filename" << '\n';
+        return VM_STATUS_ERROR_INVALID_PARAMETER;
+    }
+    std::cout << "Calling machine file open" << '\n';
+    MachineSuspendSignals(state);
+    MachineFileOpen(filename, flags, mode, FileDescriptorCallback, filedescriptor);
+    MachineResumeSignals(state);
+    
 };
 void EmptyCallback2(void *calldata, int result){
     //calldata - passed into the callback function upon completion of the open file request
     //calldata - received from MachineFileOpen()
     //result - new file descriptor
-        ;
+    ;
 }
 
 /*
-VMFileClose() closes a file previously opened with a call to VMFileOpen().
-When a thread calls VMFileClose() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful closing of the file is completed.
-*/
+ VMFileClose() closes a file previously opened with a call to VMFileOpen().
+ When a thread calls VMFileClose() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful closing of the file is completed.
+ */
 TVMStatus VMFileClose(int filedescriptor){
     MachineFileClose(filedescriptor, EmptyCallback2, NULL);
 };
 
 /*
-VMFileRead() attempts to read the number of bytes specified in the integer referenced by lengthinto the location specified by datafrom the file specified by filedescriptor.
-The filedescriptorshould have been obtained by a previous call to VMFileOpen(). The actual number of bytes transferred by the read will be updated in the lengthlocation.
-When a thread calls VMFileRead() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful reading of the file is completed.
-*/
+ VMFileRead() attempts to read the number of bytes specified in the integer referenced by lengthinto the location specified by datafrom the file specified by filedescriptor.
+ The filedescriptorshould have been obtained by a previous call to VMFileOpen(). The actual number of bytes transferred by the read will be updated in the lengthlocation.
+ When a thread calls VMFileRead() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful reading of the file is completed.
+ */
 TVMStatus VMFileRead(int filedescriptor, void *data, int *length){
 };
 
 /*
-VMFileWrite() attempts to write the number of bytes specified in the integer referenced by length from the location specified by data to the file specified by filedescriptor.
-The filedescriptorshould have been obtained by a previous call to VMFileOpen(). The actual number of bytes transferred by the write will be updated in the lengthlocation.
-When a thread calls VMFileWrite() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful writing of the file is completed.
-*/
+ VMFileWrite() attempts to write the number of bytes specified in the integer referenced by length from the location specified by data to the file specified by filedescriptor.
+ The filedescriptorshould have been obtained by a previous call to VMFileOpen(). The actual number of bytes transferred by the write will be updated in the lengthlocation.
+ When a thread calls VMFileWrite() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful writing of the file is completed.
+ */
 
 
 void EmptyCallback(void *calldata, int result){
     //calldata - passed into the callback function upon completion of the open file request
     //calldata - received from MachineFileOpen()
     //result - new file descriptor
-        ;
+    ;
 }
 
 TVMStatus VMFileWrite(int filedescriptor, void *data, int *length){
-	//Just a call to other things?
-	//TMachineFileCallback callback;
-	//get filedescriptor from VMFILEOPEN()
-	//void *data;
-	//Suspend signals before here? Don't want race
-	MachineFileWrite(filedescriptor, data, *length, EmptyCallback, NULL);
-
+    //Just a call to other things?
+    //TMachineFileCallback callback;
+    //get filedescriptor from VMFILEOPEN()
+    //void *data;
+    //Suspend signals before here? Don't want race
+    MachineFileWrite(filedescriptor, data, *length, EmptyCallback, NULL);
+    
 };
 
 /*
-VMFileSeek() attempts to seek the number of bytes specified by offsetfrom the location specified by whencein the file specified by filedescriptor.
-The filedescriptorshould have been obtained by a previous call to VMFileOpen(). The new offset placed in the newoffsetlocation if the parameter is not NULL.
-When a thread calls VMFileSeek() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful seeking inthe file is completed.
-*/
+ VMFileSeek() attempts to seek the number of bytes specified by offsetfrom the location specified by whencein the file specified by filedescriptor.
+ The filedescriptorshould have been obtained by a previous call to VMFileOpen(). The new offset placed in the newoffsetlocation if the parameter is not NULL.
+ When a thread calls VMFileSeek() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful seeking inthe file is completed.
+ */
 TVMStatus VMFileSeek(int filedescriptor, int offset, int whence, int *newoffset){
-
+    
 };
 
 #define VMPrint(format, ...)        VMFilePrint ( 1,  format, ##__VA_ARGS__)
