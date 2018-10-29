@@ -101,7 +101,6 @@ void TCBList::SleepTimerCountdown(){
 //Tells the current thread to go to sleep.
 void TCBList::AddSleeper(){
     SleepingThreads.push_back(CurrentTCB);
-    RemoveFromReady(CurrentTCB->ThreadID);
     CurrentTCB = NULL;
 }
 
@@ -439,8 +438,8 @@ void MachineAlarmCallback(void * calldata){
 TVMStatus VMThreadSleep(TVMTick tick){
     MachineSuspendSignals(GlobalSignal);
     globalList.CurrentTCB->SetTicks(tick);
+    globalList.RemoveFromReady(globalList.CurrentTCB ->ThreadID);
     globalList.AddSleeper();
-    MachineRequestAlarm(1000* tick, MachineAlarmCallback, NULL);
     MachineResumeSignals(GlobalSignal);
 
 };
