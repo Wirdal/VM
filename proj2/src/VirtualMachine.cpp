@@ -280,8 +280,6 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     VMThreadCreate(IdleCallback, NULL, memorysize,  ((TVMThreadPriority)0x00), &idleID);
     std::cout<<"Activate idle Thread"<<"\n";
     VMThreadActivate(idleID);
-    
-    
     MachineEnableSignals();
     entry(argc, argv);
     MachineTerminate();
@@ -428,8 +426,10 @@ TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
  If tick is specified as VM_TIMEOUT_IMMEDIATEthe current process yields the remainder of its processing quantum to the next ready process of equal priority.
  */
 TVMStatus VMThreadSleep(TVMTick tick){
+    MachineSuspendSignals(GlobalSignal);
     globalList.CurrentTCB->ticks = tick;
     globalList.AddSleeper();
+    MachineResumeSignals(GlobalSignal);
 };
 
 /*
