@@ -20,7 +20,7 @@ struct TCB {
     TVMThreadPriority prio;
     TVMThreadID ThreadID;
     TVMThreadState state;
-    uint8_t stack; // Not sure if this is correct stack base
+    uint8_t *stack; // Not sure if this is correct stack base
     void SetState(TVMThreadState state);
     TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ID, uint8_t stack);
     // TCB()
@@ -37,7 +37,7 @@ TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID
     prio = prio;
     ThreadID = ID; // Have to increment youirself
     state = VM_THREAD_STATE_DEAD;
-    stack = stack;
+    stack = *new uint8_t[stack];
 }
 
 // This neeeds to be created ONCE
@@ -189,7 +189,7 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 
         //CREATE IDLE THREAD
         //TVMThreadIDRef idleThreadID;
-
+    
         std::cout<<"Threads | idle: id"<<"\n";
         //returns immediated, alrarmcb called by machine
         //tickms is the param for the AlarmCallback
