@@ -62,6 +62,7 @@ struct TCBList{
     void SetCurrentThread(TCB* CurrentTCB);
     void SetCurrentThread(TVMThreadID ID);
     void RemoveFromReady(TVMThreadID IDnum);
+    void RemoveFromReady(TCB* PassedTCB);
     void AddToReady(TCB*);
     TCB* GetCurrentTCB();
     std::vector<TCB*> SleepingThreads;
@@ -127,6 +128,33 @@ TCB* TCBList::FindTCB(TVMThreadID IDnum){
 
 TVMThreadID TCBList::IncrementID() {
     return IDCounter = IDCounter + 1;
+}
+
+void TCBList::RemoveFromReady(TCB* PassedTCB){
+    if (CurrentTCB == PassedTCB){
+        CurrentTCB = NULL;
+    }
+    int i = 0;
+    for(auto s: LowReady)
+        if (s == PassedTCB){
+            LowReady.erase(LowReady.begin()+ i); // Need to remove it from the schedular as well?
+            return;
+        }
+    ++i;
+    i = 0;
+    for(auto s: MediumReady)
+        if (s == PassedTCB){
+            MediumReady.erase(MediumReady.begin()+ i); // Need to remove it from the schedular as well?
+            return;
+        }
+    ++i;
+    i = 0;
+    for(auto s: HighReady)
+        if (s == PassedTCB){
+            HighReady.erase(HighReady.begin()+ i); // Need to remove it from the schedular as well?
+            return;
+        }
+    ++i;
 }
 
 void TCBList::RemoveFromReady(TVMThreadID IDnum){
@@ -438,7 +466,7 @@ void MachineAlarmCallback(void * calldata){
 TVMStatus VMThreadSleep(TVMTick tick){
     MachineSuspendSignals(GlobalSignal);
     globalList.CurrentTCB->SetTicks(tick);
-    globalList.RemoveFromReady(globalList.CurrentTCB ->ThreadID);
+    globalList.RemoveFromReady(globalList.CurrentTCB);
     globalList.AddSleeper();
     MachineResumeSignals(GlobalSignal);
 
