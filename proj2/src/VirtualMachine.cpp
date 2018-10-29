@@ -15,7 +15,7 @@
 SMachineContext contextGlob;
 
 
-
+int globalTick = 0;
 //TMachineSignalStateRef GlobalSignal; not supposed to be global
 // The Thread control block. One is made for each thread
 struct TCB {
@@ -204,12 +204,34 @@ extern "C" {
     void VMUnloadModule(void);
     TVMStatus VMFilePrint(int filedescriptor, const char *format, ...);
 }
-
+void scheduler(){
+    //access our lists of priority
+    //figure out what should be running
+    //set it to running
+    //old thread should be those in ready state, new context should be those in running state
+    
+    
+    //get thread going to last of global lists
+    TVMThreadID thread = 1; //test placeholder
+    MachineContextSwitch(globalList.FindTCB(thread - 1)->TCBcontext,globalList.FindTCB(thread)->TCBcontext);
+}
 void AlarmCallback(void *calldata){
-    //calldata - passed into the callback function upon completion of the open file request
-    //calldata - received from MachineFileOpen()
-    //result - new file descriptor
-    ;
+
+    TMachineSignalStateRef signalref;
+    MachineSuspendSignals(signalref);
+    //for all threads
+    
+        //add sleep count
+    
+        //if sleep count = 0, change the state to ready
+        //else decrement by one
+    
+    scheduler();
+    MachineResumeSignals(signalref);
+    
+    //sleeping thread decrement
+    
+    //all others increment
 }
 
 
@@ -307,6 +329,8 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     VMThreadCreate(IdleCallback, NULL, memorysize,  ((TVMThreadPriority)0x00), &idleID);
     TCB* IdleTCB = globalList.FindTCB(1);
     
+    
+    MachineRequestAlarm(tickms * 100, AlarmCallback, NULL);
     // MachineContextCreate(globalList.FindTCB(thread)->TCBcontext, IdleCallback, NULL,  globalList.FindTCB(thread)->stackaddr,0x100000);
     
     //std::cout<<"Activate idle Thread [id: "<< idleID << &idleID<<"\n";
@@ -322,23 +346,17 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     
 };
 
-void scheduler(){
-    //access our lists of priority
-    //figure out what should be running
-    //set it to running
-    //old thread should be those in ready state, new context should be those in running state
-    
-    
-    //get thread going to last of global lists
-    TVMThreadID thread = 1; //test placeholder
-    MachineContextSwitch(globalList.FindTCB(thread - 1)->TCBcontext,globalList.FindTCB(thread)->TCBcontext);
-}
 /*!
  VMTickMS() puts tick time interval in milliseconds in the location specified by tickmsref.
  This is the value tickmsfrom the previous call to VMStart().
  */
 TVMStatus VMTickMS(int *tickmsref){
     if(tickmsref){
+        TMachineSignalStateRef signalref;
+        MachineSuspendSignals(signalref);
+        *tickmsref = globalTick;
+        MachineResumeSignals(signalref);
+        
         return VM_STATUS_SUCCESS;
     }
     else{
