@@ -300,11 +300,10 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     
     //Create main thread, but we don't want to disable signal
     std::cout<<"Create main Thread"<<"\n";
-    TVMThreadID maintid;
+    TVMThreadIDRef maintid;
     TVMMemorySize memorysize = 0x100000;
     TVMThreadPriority mainpriority = VM_THREAD_PRIORITY_NORMAL;
-    TCB *maintcb = new TCB(AlarmCallback, NULL, mainpriority, maintid, memorysize);
-    globalList.AddTCB(maintcb);
+	VMThreadCreate(tentry, NULL, memorysize, mainpriority ,maintid);
     
     //Create Idle Thread
     //TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
@@ -318,6 +317,7 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     entry(argc, argv);
     MachineTerminate();
     VMUnloadModule();
+    std::cout << "MAINTID " << maintid << "\n";
     return VM_STATUS_SUCCESS;
     
 };
@@ -349,15 +349,18 @@ TVMStatus VMTickCount(TVMTickRef tickref){
  The size of the threads stack is specified by memsize, and the priority is specified by prio.
  The thread identifier is put into the location specified by the tidparameter.
  */
-TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
+TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef  tid){
     std::cout<<"VMThreadCreate"<<"\n";
     MachineSuspendSignals(GlobalSignal); //suspend threads so we can run
     if ((entry == NULL) || (tid == NULL)){
         return VM_STATUS_ERROR_INVALID_PARAMETER;
     }
-    //TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack);
-    TCB NewTCB = TCB(entry, param, prio, globalList.IncrementID(), memsize);
+    *tid = globalList.IncrementID();
+    std::cout << "Reference ID " << *tid << "\n";
+    TVMThreadID ID = *tid;
+    TCB NewTCB = TCB(entry, param, prio, ID, memsize);
     globalList.AddTCB(&NewTCB);
+    std::cout << "Thread ID" << ID << "\n";
     // Add it to the list
     MachineResumeSignals(GlobalSignal);
     return VM_STATUS_SUCCESS;
@@ -465,9 +468,10 @@ void MachineAlarmCallback(void * calldata){
 
 TVMStatus VMThreadSleep(TVMTick tick){
     MachineSuspendSignals(GlobalSignal);
-    globalList.CurrentTCB->SetTicks(tick);
+    globalList.CurrentTCB->SetTicks(tick*1000);
     globalList.RemoveFromReady(globalList.CurrentTCB);
     globalList.AddSleeper();
+    MachineRequestAlarm(tick, MachineAlarmCallback, NULL);
     MachineResumeSignals(GlobalSignal);
 
 };
