@@ -526,10 +526,10 @@ TVMStatus VMFileOpen(const char *filename, int flags, int mode, int *filedescrip
  VMFileClose() closes a file previously opened with a call to VMFileOpen().
  When a thread calls VMFileClose() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful closing of the file is completed.
  */
-TVMStatus VMFileClose(int filedescriptor){
-    MachineFileClose(filedescriptor, EmptyCallback2, NULL);
-    // Need to check if it succeeds
-};
+// TVMStatus VMFileClose(int filedescriptor){
+//     MachineFileClose(filedescriptor, EmptyCallback, NULL);
+//     // Need to check if it succeeds
+// };
 
 /*
  VMFileRead() attempts to read the number of bytes specified in the integer referenced by lengthinto the location specified by datafrom the file specified by filedescriptor.
@@ -577,7 +577,7 @@ TVMStatus VMFileWrite(int filedescriptor, void *data, int *length){
  When a thread calls VMFileSeek() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful seeking inthe file is completed.
  */
 TVMStatus VMFileSeek(int filedescriptor, int offset, int whence, int *newoffset){
-    //Check for success or failure
+
 };
 
 #define VMPrint(format, ...)        VMFilePrint ( 1,  format, ##__VA_ARGS__)
