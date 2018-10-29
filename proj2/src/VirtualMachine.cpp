@@ -18,6 +18,7 @@ struct TCB {
     void SetState(TVMThreadState state);
     void DecrementTicks();
     TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ID, uint8_t stack);
+    void SetTicks(TVMTick ticks);
     //~TCB();
 };
 
@@ -26,6 +27,9 @@ void TCB::SetState(TVMThreadState state){
     state=state;
 }
 
+void TCB::SetTicks(TVMTick ticks){
+	ticks = ticks;
+}
 void TCB::DecrementTicks(){
     ticks = ticks - 1;
 }
@@ -104,8 +108,10 @@ void TCBList::AddSleeper(){
 void TCBList::SetCurrentThread(TCB* CurrentTCB){
     CurrentTCB = CurrentTCB;
 }
-void TCBList::SetCurrentThread(TVMThreadID ID){
-    CurrentTCB = FindTCB(ID);
+void TCBList::SetCurrentThread(TVMThreadID ID)
+{
+	std::cout << "Changing thread \n";
+	CurrentTCB = FindTCB(ID);
 }
 
 TCB* TCBList::GetCurrentTCB(){
@@ -280,6 +286,7 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     VMThreadCreate(IdleCallback, NULL, memorysize,  ((TVMThreadPriority)0x00), &idleID);
     std::cout<<"Activate idle Thread"<<"\n";
     VMThreadActivate(idleID);
+    globalList.SetCurrentThread(idleID);
     MachineEnableSignals();
     entry(argc, argv);
     MachineTerminate();
@@ -427,12 +434,8 @@ TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
  */
 TVMStatus VMThreadSleep(TVMTick tick){
     MachineSuspendSignals(GlobalSignal);
-    std::cout << "Setting ticks\n";
-    globalList.CurrentTCB->ticks = tick;
-    std::cout << "Adding to sleeper list\n";
-    globalList.AddSleeper();
+    globalList.CurrentTCB->SetTicks(tick);
     MachineResumeSignals(GlobalSignal);
-    std::cout << "Returning\n";
 
 };
 
