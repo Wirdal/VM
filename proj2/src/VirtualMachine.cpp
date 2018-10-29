@@ -436,28 +436,17 @@ TVMStatus VMThreadActivate(TVMThreadID thread){
     }
     else {
         VMPrint("Else (TCB dead)\n");
-        FoundTCB->SetState(VM_THREAD_STATE_READY);
-        MachineContextCreate(FoundTCB->TCBcontext, IdleCallback, NULL, FoundTCB->stackaddr,0x100000);
-        switch (FoundTCB->prio)
+        MachineContextCreate(globalList.FindTCB(thread)->TCBcontext, IdleCallback, NULL,  globalList.FindTCB(thread)->stackaddr,0x100000);
+        FoundTCB->state = VM_THREAD_STATE_READY;
+        
+        switch (globalList.FindTCB(thread)->state)
         {
-            case VM_THREAD_PRIORITY_LOW:
-                VMPrint("low\n");
+            case VM_THREAD_STATE_READY:
+                VMPrint("Thread Ready\n");
                 globalList.LowReady.push_back(FoundTCB);
                 break;
-            case VM_THREAD_PRIORITY_NORMAL:
-                VMPrint("norm\n");
-                globalList.MediumReady.push_back(FoundTCB);
-                break;
-            case VM_THREAD_PRIORITY_HIGH:
-                VMPrint("high\n");
-                globalList.HighReady.push_back(FoundTCB);
-                break;
-            case ((TVMThreadPriority)0x00):
-                VMPrint("idle\n");
-                FoundTCB->state = VM_THREAD_STATE_RUNNING;
-                break;
             default:
-                VMPrint("no prio\n");
+                VMPrint("setstate failed\n");
                 break;
                 
         }
