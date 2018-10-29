@@ -14,10 +14,12 @@ void VMThread(void *param){
 void VMMain(int argc, char *argv[]){
     TVMThreadID VMThreadID;
     TVMThreadState VMState;
+    printf("VMThreadID start: %d", VMThreadID);
+    printf("\n");
     VMPrint("VMMain creating thread.\n");
     VMThreadCreate(VMThread, NULL, 0x100000, VM_THREAD_PRIORITY_NORMAL, &VMThreadID);
-    
-    printf("In Thread\n");
+    printf("VMThreadID after: %d", VMThreadID);
+    printf("\n");
     VMPrint("VMMain getting thread state: ");
     VMThreadState(VMThreadID, &VMState);
     switch(VMState){
