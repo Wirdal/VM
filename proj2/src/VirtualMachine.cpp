@@ -300,10 +300,10 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     
     //Create main thread, but we don't want to disable signal
     std::cout<<"Create main Thread"<<"\n";
-    TVMThreadIDRef maintid;
+    TVMThreadID maintid;
     TVMMemorySize memorysize = 0x100000;
     TVMThreadPriority mainpriority = VM_THREAD_PRIORITY_NORMAL;
-	VMThreadCreate(tentry, NULL, memorysize, mainpriority ,maintid);
+	VMThreadCreate(tentry, NULL, memorysize, mainpriority , &maintid);
     
     //Create Idle Thread
     //TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
@@ -349,7 +349,7 @@ TVMStatus VMTickCount(TVMTickRef tickref){
  The size of the threads stack is specified by memsize, and the priority is specified by prio.
  The thread identifier is put into the location specified by the tidparameter.
  */
-TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef  tid){
+TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
     std::cout<<"VMThreadCreate"<<"\n";
     MachineSuspendSignals(GlobalSignal); //suspend threads so we can run
     if ((entry == NULL) || (tid == NULL)){
@@ -471,11 +471,7 @@ TVMStatus VMThreadSleep(TVMTick tick){
     globalList.CurrentTCB->SetTicks(tick*1000);
     globalList.RemoveFromReady(globalList.CurrentTCB);
     globalList.AddSleeper();
-<<<<<<< HEAD
     MachineRequestAlarm(tick, MachineAlarmCallback, NULL);
-=======
-    MachineRequestAlarm(tick*1000, MachineAlarmCallback, NULL);
->>>>>>> a52afb409600b17748daf366ed055ca989626114
     MachineResumeSignals(GlobalSignal);
 
 };
