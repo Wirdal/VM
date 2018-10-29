@@ -24,10 +24,6 @@ struct TCB {
     void SetState(TVMThreadState state);
     TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ID, uint8_t stack);
     ~TCB();
-<<<<<<< HEAD
-    // TCB()
-=======
->>>>>>> 2f1c2d2df7441659c352dbf25c52553a0330c1b7
 };
 
 void TCB::SetState(TVMThreadState state){
@@ -44,10 +40,6 @@ TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID
     stack = *new uint8_t[stack];
 }
 
-TCB::~TCB(){
-    delete stack;
-}
-// This neeeds to be created ONCE
 TCB::~TCB(){
     delete stack;
 }
