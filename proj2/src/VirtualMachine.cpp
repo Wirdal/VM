@@ -228,11 +228,13 @@ void IdleCallback(void *calldata){
         std::cout<<"In Idle"<<"\n";
     }
     */
-    ;
+    /*
     while(1){
         std::cout<<"In Idle"<<"\n";
         VMPrint("***In Idle\n");
     }
+     */
+    ;
 }
 void VMThread(void *param){
     TMachineSignalStateRef signalref;
@@ -480,7 +482,7 @@ TVMStatus VMThreadActivate(TVMThreadID thread){
                 
         }
         //switch old to new
-        MachineContextSwitch(globalList.FindTCB(thread)->TCBcontext,globalList.FindTCB(thread)->TCBcontext);
+        MachineContextSwitch(globalList.FindTCB(thread - 1)->TCBcontext,globalList.FindTCB(thread)->TCBcontext);
         MachineResumeSignals(signalref);
         return VM_STATUS_SUCCESS;
     }
