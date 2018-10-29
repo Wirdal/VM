@@ -178,7 +178,9 @@ void TCBList::RemoveTCB(TVMThreadID IDnum){
         }
     ++i;
 }
+
 TCBList globalList = TCBList();
+TVMThreadID globid;
 // std::list <TVMThreadID*> sleepingThreads;
 
 //TA says list necessary, shaky on why, maybe b/c mem non contiguous
@@ -258,20 +260,18 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     
 
     //TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
-    TVMThreadID idleID = 1;
-    TVMThreadID maintid = 2;
+    TVMThreadID idleID;
+    TVMThreadID maintid;
     
     //Create main thread, but we don't want to disable signal
     
-    
+    /*
     std::cout<<"/Create VMTHREAD Thread"<<"\n";
     VMPrint("*VM creating Example thread\n");
     TVMThreadID VMThreadID1;
     
-
-    
     VMThreadCreate(VMThread, NULL, 0x100000, VM_THREAD_PRIORITY_NORMAL, &VMThreadID1);
-    VMThreadActivate(VMThreadID1-1);
+    VMThreadActivate(VMThreadID1);
     TVMThreadState VMState = VM_THREAD_STATE_READY;
     
     TCB* FoundTCB = globalList.FindTCB(VMThreadID1);
@@ -297,10 +297,11 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     std::cout<<"/Activate VMTHREAD Thread"<<"\n";
     VMPrint("VMThread activate\n");
     VMThreadActivate(VMThreadID1);
+    */
     
     
-    
-     //main thread
+    //main thread
+    //id - 0 always
     std::cout<<"\n";
     std::cout<<"/Create main Thread"<<"\n";
     VMPrint("VM creating main thread\n");
@@ -309,14 +310,15 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     TCB *maintcb = new TCB(IdleCallback, NULL, mainpriority, maintid, memorysize);
     globalList.AddTCB(maintcb);
 
-    //Create Idle Thread
+    //Idle Thread
+    //id = 1
     //TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
     // TVMThreadPriority 0x00 -> lower than low (0x01)
     std::cout<<"/Create idle Thread"<<"\n";
     VMPrint("VM creating idle thread\n");
     VMThreadCreate(IdleCallback, NULL, memorysize,  ((TVMThreadPriority)0x00), &idleID);
     std::cout<<"/Activate idle Thread"<<"\n";
-    VMThreadActivate(idleID);
+    VMThreadActivate(idleID - 1); //idleID = 1
     
     
     
@@ -360,13 +362,19 @@ TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsiz
     std::cout<<"/VMThreadCreate"<<"\n";
     VMPrint("Create thread\n");
     MachineSuspendSignals(GlobalSignal); //suspend threads so we can run
+    //VMPrint("Create thread\n");
     if ((entry == NULL) || (tid == NULL)){
         VMPrint("NO Create\n");
         return VM_STATUS_ERROR_INVALID_PARAMETER;
         
     }
     //TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack);
-    TCB NewTCB = TCB(entry, param, prio, globalList.IncrementID(), memsize);
+    
+    //TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ID, uint8_t stack);
+    ++globid;           //ex 1 -> 2
+    tid = &globid;      //new tid (reference) is location of the new id
+    
+    TCB NewTCB = TCB(entry, param, prio, *tid, memsize);
     globalList.AddTCB(&NewTCB);
     // Add it to the list
     MachineResumeSignals(GlobalSignal);
