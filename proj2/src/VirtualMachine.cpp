@@ -471,7 +471,11 @@ TVMStatus VMThreadSleep(TVMTick tick){
     globalList.CurrentTCB->SetTicks(tick*1000);
     globalList.RemoveFromReady(globalList.CurrentTCB);
     globalList.AddSleeper();
+<<<<<<< HEAD
     MachineRequestAlarm(tick, MachineAlarmCallback, NULL);
+=======
+    MachineRequestAlarm(tick*1000, MachineAlarmCallback, NULL);
+>>>>>>> a52afb409600b17748daf366ed055ca989626114
     MachineResumeSignals(GlobalSignal);
 
 };
