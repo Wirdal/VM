@@ -158,9 +158,9 @@ void TCBList::RemoveFromReady(TVMThreadID IDnum){
 }
 
 TVMThreadID TCBList::NextReadyThread(){
-    //Finds the next ready thread in the schedular
+    // Finds the next ready thread in the schedular
     // Returns the ID to it
-    //Also removes the thread from the block
+    // Also removes the thread from the block
     if (HighReady.empty()) {
         if (MediumReady.empty()){
             if (LowReady.empty()){
@@ -429,12 +429,18 @@ TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
 };
 
 /*
- VMThreadSleep() puts the currently running thread to sleep for tickticks.
+ VMThreadSleep() puts the currently running thread to sleep for tick ticks.
  If tick is specified as VM_TIMEOUT_IMMEDIATEthe current process yields the remainder of its processing quantum to the next ready process of equal priority.
  */
+void MachineAlarmCallback(void * calldata){
+    globalList.SleepTimerCountdown();
+}
+
 TVMStatus VMThreadSleep(TVMTick tick){
     MachineSuspendSignals(GlobalSignal);
     globalList.CurrentTCB->SetTicks(tick);
+    globalList.AddSleeper();
+    MachineRequestAlarm(1000* tick, MachineAlarmCallback, NULL);
     MachineResumeSignals(GlobalSignal);
 
 };
