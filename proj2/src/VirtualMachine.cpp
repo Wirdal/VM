@@ -54,12 +54,10 @@ struct TCBList{
     TVMThreadID NextReadyThread();
     void SetCurrentThread(TCB* CurrentTCB);
     TCB* GetCurrentTCB();
-    TCBList();
     std::vector<TCB*> SleepingThreads;
     std::vector<TCB*> HighReady;
     std::vector<TCB*> MediumReady;
     std::vector<TCB*> LowReady;
-
 };
 
 void TCBList::SetCurrentThread(TCB* CurrentTCB){
