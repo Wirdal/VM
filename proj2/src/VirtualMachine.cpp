@@ -302,9 +302,10 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     std::cout<<"Create main Thread"<<"\n";
     TVMThreadID maintid;
     TVMMemorySize memorysize = 0x100000;
+    MachineSuspendSignals(GlobalSignal);
     TVMThreadPriority mainpriority = VM_THREAD_PRIORITY_NORMAL;
 	VMThreadCreate(tentry, NULL, memorysize, mainpriority , &maintid);
-    
+	std::cout << "Main TID " << maintid << "\n";
     //Create Idle Thread
     //TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
     // TVMThreadPriority 0x00 -> lower than low (0x01)
@@ -317,7 +318,6 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     entry(argc, argv);
     MachineTerminate();
     VMUnloadModule();
-    std::cout << "MAINTID " << maintid << "\n";
     return VM_STATUS_SUCCESS;
     
 };
@@ -356,13 +356,11 @@ TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsiz
         return VM_STATUS_ERROR_INVALID_PARAMETER;
     }
     *tid = globalList.IncrementID();
-    std::cout << "Reference ID " << *tid << "\n";
-    TVMThreadID ID = *tid;
-    TCB NewTCB = TCB(entry, param, prio, ID, memsize);
+    TCB NewTCB = TCB(entry, param, prio, *tid, memsize);
     globalList.AddTCB(&NewTCB);
-    std::cout << "Thread ID" << ID << "\n";
     // Add it to the list
     MachineResumeSignals(GlobalSignal);
+    std::cout << "TID " << *tid << "\n";
     return VM_STATUS_SUCCESS;
     //VMThreadState(tid, running);
     //Allocate space for thread
