@@ -427,9 +427,13 @@ TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
  */
 TVMStatus VMThreadSleep(TVMTick tick){
     MachineSuspendSignals(GlobalSignal);
+    std::cout << "Setting ticks\n";
     globalList.CurrentTCB->ticks = tick;
+    std::cout << "Adding to sleeper list\n";
     globalList.AddSleeper();
     MachineResumeSignals(GlobalSignal);
+    std::cout << "Returning\n";
+
 };
 
 /*
