@@ -5,13 +5,6 @@
 #include <array>
 #include <algorithm>
 
-/*
-class VMThread{
-    //MachineContextCreate() //what args to pass?
-
-}
-*/
-
 TMachineSignalStateRef GlobalSignal;
 // The Thread control block. One is made for each thread
 struct TCB {
@@ -23,6 +16,7 @@ struct TCB {
     TVMThreadState state;
     uint8_t *stack; // Not sure if this is correct stack base
     void SetState(TVMThreadState state);
+    void DecrementTicks();
     TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ID, uint8_t stack);
     //~TCB();
 };
@@ -32,6 +26,9 @@ void TCB::SetState(TVMThreadState state){
     state=state;
 }
 
+void TCB::DecrementTicks(){
+    ticks = ticks - 1;
+}
 //The constructor for the TCB. 
 TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ID, uint8_t stack){
     entry = entry;
@@ -61,19 +58,47 @@ struct TCBList{
     void SetCurrentThread(TCB* CurrentTCB);
     void SetCurrentThread(TVMThreadID ID);
     void RemoveFromReady(TVMThreadID IDnum);
+    void AddToReady(TCB*);
     TCB* GetCurrentTCB();
     std::vector<TCB*> SleepingThreads;
     std::vector<TCB*> HighReady;
     std::vector<TCB*> MediumReady;
     std::vector<TCB*> LowReady;
     void AddSleeper();
+    void SleepTimerCountdown();
 };
 
+void TCBList::AddToReady(TCB* FoundTCB){
+    switch (FoundTCB->prio)
+    {
+    case VM_THREAD_PRIORITY_LOW:
+        LowReady.push_back(FoundTCB);
+        break;
+    case VM_THREAD_PRIORITY_NORMAL:
+        MediumReady.push_back(FoundTCB);
+        break;
+    case VM_THREAD_PRIORITY_HIGH:
+        HighReady.push_back(FoundTCB);
+        break;
+    }
+}
+
+void TCBList::SleepTimerCountdown(){
+    for(auto s: SleepingThreads)
+        if (s-> ticks != 0){
+            s->DecrementTicks();
+        }
+    for(auto s: SleepingThreads) 
+        if (s -> ticks == 0){
+            AddToReady(s);
+        }
+    return;
+}
 //Tells the current thread to go to sleep.
 void TCBList::AddSleeper(){
     SleepingThreads.push_back(CurrentTCB);
     RemoveFromReady(CurrentTCB->ThreadID);
-
+    CurrentTCB = NULL;
 }
 
 void TCBList::SetCurrentThread(TCB* CurrentTCB){
@@ -117,7 +142,7 @@ void TCBList::RemoveFromReady(TVMThreadID IDnum){
             return;
         }
         ++i;
-    int i = 0;
+    i = 0;
     for(auto s: HighReady)
         if (s->ThreadID == IDnum){
             HighReady.erase(HighReady.begin()+ i); // Need to remove it from the schedular as well?
@@ -329,18 +354,7 @@ TVMStatus VMThreadActivate(TVMThreadID thread){
     }
     else {
         FoundTCB->SetState(VM_THREAD_STATE_READY);
-        switch (FoundTCB->prio)
-        {
-            case VM_THREAD_PRIORITY_LOW:
-                globalList.LowReady.push_back(FoundTCB);
-                break;
-            case VM_THREAD_PRIORITY_NORMAL:
-                globalList.MediumReady.push_back(FoundTCB);
-                break;
-            case VM_THREAD_PRIORITY_HIGH:
-                globalList.HighReady.push_back(FoundTCB);
-                break;
-        }
+        globalList.AddToReady(FoundTCB);
         MachineResumeSignals(GlobalSignal);
         return VM_STATUS_SUCCESS;
     }
@@ -363,6 +377,7 @@ TVMStatus VMThreadTerminate(TVMThreadID thread){
         // Also need to stop it running
         FoundTCB->SetState(VM_THREAD_STATE_DEAD);
         // Move it to dead
+        
         return VM_STATUS_SUCCESS;
     }
 };
@@ -398,9 +413,8 @@ VMThreadSleep() puts the currently running thread to sleep for tickticks.
 If tick is specified as VM_TIMEOUT_IMMEDIATEthe current process yields the remainder of its processing quantum to the next ready process of equal priority.
 */
 TVMStatus VMThreadSleep(TVMTick tick){
-
-
-
+    globalList.CurrentTCB->ticks = tick;
+    globalList.AddSleeper();
 };
 
 /*
