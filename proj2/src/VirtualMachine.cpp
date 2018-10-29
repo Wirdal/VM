@@ -98,8 +98,10 @@ TCB* TCBList::GetCurrentTCB(){
 TCB* TCBList::FindTCB(TVMThreadID IDnum){
     for(auto s: Tlist)
         if (s->ThreadID == IDnum){
+            std::cout<<"/FindTCB found id: "<<s<<"\n";
             return s;
         }
+
     return NULL;
 }
 
@@ -271,7 +273,7 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 
     //TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
     TVMThreadID idleID;
-    TVMThreadID maintid;
+    TVMThreadID maintid = 0;
     
     //Create main thread, but we don't want to disable signal
     
@@ -308,33 +310,37 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     VMPrint("VMThread activate\n");
     VMThreadActivate(VMThreadID1);
     */
-    
-    
-    //Idle Thread
-    //id = 0 - always
-    //TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
-    // TVMThreadPriority 0x00 -> lower than low (0x01)
-    std::cout<<"/Create idle Thread"<<"\n";
-    VMPrint("VM creating idle thread\n");
-    
     TVMMemorySize memorysize = 0x100000;
-    VMThreadCreate(IdleCallback, NULL, memorysize,  ((TVMThreadPriority)0x00), &idleID);
-    //MachineContextCreate(
-    std::cout<<"Activate idle Thread [id: "<< idleID << &idleID<<"\n";
-    VMThreadActivate(1); //idleID = 1
-    
     
     //main thread
-    //id - 1
+    //id - 0 (we don't use VMThreadCreate so that id can be 0)
     std::cout<<"\n";
     std::cout<<"/Create main Thread"<<"\n";
     VMPrint("VM creating main thread\n");
     TVMThreadPriority mainpriority = VM_THREAD_PRIORITY_NORMAL;
     TCB *maintcb = new TCB(IdleCallback, NULL, mainpriority, maintid, memorysize);
     globalList.AddTCB(maintcb);
-
+    
+    
+    
+    //Idle Thread
+    //id = 1 - always
+    //TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
+    // TVMThreadPriority 0x00 -> lower than low (0x01)
+    std::cout<<"/Create idle Thread"<<"\n";
+    VMPrint("VM creating idle thread\n");
+    VMThreadCreate(IdleCallback, NULL, memorysize,  ((TVMThreadPriority)0x00), &idleID);
+    TCB* IdleTCB = globalList.FindTCB(1);
     
 
+    
+    // MachineContextCreate(globalList.FindTCB(thread)->TCBcontext, IdleCallback, NULL,  globalList.FindTCB(thread)->stackaddr,0x100000);
+
+    //std::cout<<"Activate idle Thread [id: "<< idleID << &idleID<<"\n";
+    //VMThreadActivate(1); //idleID = 1
+    
+
+    MachineContextCreate(IdleTCB->TCBcontext,IdleCallback, NULL, globalList.FindTCB(maintid)->stackaddr,0x100000);
     MachineEnableSignals();
     entry(argc, argv);
     MachineTerminate();
@@ -384,7 +390,8 @@ TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsiz
     //TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack);
     
     //TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ID, uint8_t stack);
-    ++globid;           //ex 1 -> 2
+    //ex 1 -> 2
+    ++globid;
     tid = &globid;      //new tid (reference) is location of the new id
     std::cout<<"globalid: "<<globid<<"\n";
     
@@ -424,6 +431,7 @@ TVMStatus VMThreadActivate(TVMThreadID thread){
     VMPrint("\nACTIVATING\n");
     TMachineSignalStateRef signalref;
     MachineSuspendSignals(signalref);
+    std::cout<<"/Activate ID: " <<thread<<"\n";
     
     TCB* FoundTCB = globalList.FindTCB(thread);
     if (FoundTCB == NULL){
@@ -457,7 +465,7 @@ TVMStatus VMThreadActivate(TVMThreadID thread){
                 break;
             case ((TVMThreadPriority)0x00):
                 VMPrint("idle\n");
-                FoundTCB->state = VM_THREAD_STATE_RUNNING;
+                FoundTCB->state = VM_THREAD_STATE_READY;
                 break;
             default:
                 VMPrint("no prio\n");
