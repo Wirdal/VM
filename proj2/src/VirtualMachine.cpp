@@ -179,7 +179,6 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 
         //TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack);
         // TCB()
-        TVMThreadID maintid = 0;
         TVMThreadPriority mainpriority = VM_THREAD_PRIORITY_NORMAL;
 
         //Creates Main thread
