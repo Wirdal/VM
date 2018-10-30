@@ -22,6 +22,7 @@ struct TCB {
     TVMThreadEntry entry; // Entry point, what function we will point to
     void * param;
     TVMTick ticks;
+    int FileDescriptor;
     TVMThreadPriority prio;
     TVMThreadID ThreadID;
     TVMThreadState state;
@@ -47,6 +48,7 @@ void TCB::SetTicks(TVMTick pticks){
 void TCB::DecrementTicks(){
     ticks = ticks - 1;
 }
+
 
 //The constructor for the TCB.
 TCB::TCB(TVMThreadEntry pentry, void * pparam, TVMThreadPriority pprio, TVMThreadID pID, uint8_t stack){
@@ -118,17 +120,13 @@ void TCBList::SleepTimerCountdown(){
 }
 //Tells the current thread to go to sleep.
 void TCBList::AddSleeper(){
-    VMPrint("Before pushing to list \n");
     SleepingThreads.push_back(CurrentTCB);
-    VMPrint("After pushing to list \n");
-    VMPrint("After removing the current TCB \n");
 }
 
 void TCBList::SetCurrentThread(TCB* CurrentTCB){
     CurrentTCB = CurrentTCB;
 }
 void TCBList::SetCurrentThread(TVMThreadID ID){
-	std::cout << "Changing thread \n";
 	CurrentTCB = FindTCB(ID);
 }
 
@@ -281,14 +279,13 @@ void scheduler(){
     //figure out what should be running
     //set it to running
     //old thread should be those in ready state, new context should be those in running state
-    VMPrint("Entering schedule()...\n");
+
     TCB* OldTCB = globalList.CurrentTCB;
-    std::cout << "Old ID before: " << OldTCB->ThreadID << "\n";
+
     globalList.Schedule();
     TCB* NewTCB = globalList.CurrentTCB;
     //get thread going to last of global lists
-    std::cout << "Old ID after: " << OldTCB->ThreadID << "\n";
-    std::cout << "New ID after: " << NewTCB->ThreadID << "\n";
+
     MachineContextSwitch(OldTCB->TCBcontext,NewTCB->TCBcontext);
 }
 void AlarmCallback(void *calldata){
@@ -321,7 +318,7 @@ void IdleCallback(void *calldata){
     //std::cout<<"In Idle"<<"\n";
     MachineEnableSignals();
     while(1){
-        std::cout<<"In Idle"<<"\n";
+
     }
     ;
 }
@@ -338,13 +335,9 @@ void skeleton(void *param){     //we use this to switch to the correct context
 }
 
 TVMStatus VMStart(int tickms, int argc, char *argv[]){
-    std::cout<<"/VMStart"<<"\n";
-    VMPrint("Machine not initialized, will not print\n"); //wont print
 
     MachineInitialize();
-    VMPrint("\nMachine Initialized\n");
     MachineEnableSignals();
-    VMPrint("Sig Enabled\n");
 
     // Returns Null if fails to load
     TVMMainEntry entry = VMLoadModule(argv[0]);
@@ -354,28 +347,15 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     else{
         std::cout << "Loaded module \n";
     }
-
-
-    //TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
     TVMThreadID idleID;
     TVMThreadID maintid = 0;
     TVMMemorySize memorysize = 0x100000;
-
-    //main thread
-    //id - 0 (we don't use VMThreadCreate so that id can be 0)
-    std::cout<<"\n";
-    std::cout<<"/Create main Thread"<<"\n";
-    VMPrint("VM creating main thread\n");
     TVMThreadPriority mainpriority = VM_THREAD_PRIORITY_NORMAL;
     TCB *maintcb = new TCB(EmptyThreadCallback, NULL, mainpriority, maintid, memorysize);
     globalList.AddTCB(maintcb);
 
-    //Idle Thread
-    //id = 1
-    //TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
-    // TVMThreadPriority 0x00 -> lower than low (0x01)
-    std::cout<<"/Create idle Thread"<<"\n";
-    VMPrint("VM creating idle thread\n");
+
+
     VMThreadCreate(IdleCallback, NULL, memorysize,  ((TVMThreadPriority)0x00), &idleID);
     TCB* IdleTCB = globalList.FindTCB(1);
 
@@ -435,12 +415,9 @@ TVMStatus VMTickCount(TVMTickRef tickref){
  */
 TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
     TMachineSignalStateRef signalref;
-    std::cout<<"/VMThreadCreate"<<"\n";
-    VMPrint("Create thread\n");
     MachineSuspendSignals(signalref); //suspend threads so we can run
     //VMPrint("Create thread\n");
     if ((entry == NULL) || (tid == NULL)){
-        VMPrint("NO Create\n");
         return VM_STATUS_ERROR_INVALID_PARAMETER;
 
     }
@@ -450,7 +427,6 @@ TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsiz
     //ex 1 -> 2
     ++globid;
     *tid = globid;      //new tid (reference) is location of the new id
-    std::cout<<"globalid: "<<globid<<"\n";
 
     TCB *NewTCB = new TCB(entry, param, prio, *tid, memsize);
     globalList.AddTCB(NewTCB);
@@ -485,52 +461,43 @@ TVMStatus VMThreadDelete(TVMThreadID thread){
  After activation the thread enters the ready state VM_THREAD_STATE_READY, and must begin at the entryfunction specified.
  */
 TVMStatus VMThreadActivate(TVMThreadID thread){
-    std::cout<<"/VMThreadActivate"<<"\n";
-    VMPrint("\nACTIVATING\n");
+
     TMachineSignalStateRef signalref;
     MachineSuspendSignals(signalref);
-    std::cout<<"/Activate ID: " <<thread<<"\n";
+
 
     TCB* FoundTCB = globalList.FindTCB(thread);
     if (FoundTCB == NULL){
-        VMPrint("NO TCB\n");
+
         MachineResumeSignals(signalref);
         return VM_STATUS_ERROR_INVALID_ID;
     }
     else if (FoundTCB->state != VM_THREAD_STATE_DEAD){
-        VMPrint("TCB Not dead\n");
         MachineResumeSignals(signalref);
         return VM_STATUS_ERROR_INVALID_STATE;
     }
     else {
-        VMPrint("Else (TCB dead)\n");
         MachineContextCreate(globalList.FindTCB(thread)->TCBcontext, IdleCallback, NULL,  globalList.FindTCB(thread)->stackaddr,0x100000);
         FoundTCB->state = VM_THREAD_STATE_READY;
         globalList.FindTCB(thread)->state = VM_THREAD_STATE_READY;
         if(globalList.FindTCB(thread)->state == VM_THREAD_STATE_READY){
-            VMPrint("Ready\n");
             std::cout << "ID: " << thread << "\n";
         }
         switch (globalList.FindTCB(thread)->prio)
         {
             case VM_THREAD_PRIORITY_LOW:
-                VMPrint("low\n");
                 globalList.LowReady.push_back(FoundTCB);
                 break;
             case VM_THREAD_PRIORITY_NORMAL:
-                VMPrint("norm\n");
                 globalList.MediumReady.push_back(FoundTCB);
                 break;
             case VM_THREAD_PRIORITY_HIGH:
-                VMPrint("high\n");
                 globalList.HighReady.push_back(FoundTCB);
                 break;
             case ((TVMThreadPriority)0x00):
-                VMPrint("idle\n");
                 FoundTCB->state = VM_THREAD_STATE_READY;
                 break;
             default:
-                VMPrint("no prio\n");
                 break;
         }
         // globalList.FindTCB(thread)->state = VM_THREAD_STATE_READY;
@@ -538,23 +505,18 @@ TVMStatus VMThreadActivate(TVMThreadID thread){
         switch (globalList.FindTCB(thread)->state)
         {
             case VM_THREAD_STATE_READY:
-                VMPrint("Thread Ready\n");
                 //globalList.LowReady.push_back(FoundTCB);
                 break;
             case VM_THREAD_STATE_RUNNING:
-                VMPrint("Thread idle\n");
                 //globalList.LowReady.push_back(FoundTCB);
                 break;
             default:
-                VMPrint("setstate failed\n");
                 break;
 
         }
         globalList.SetCurrentThread(thread);
         //switch old to new
-        VMPrint("Calling schedule()...\n");
         scheduler();
-        VMPrint("After schedule()...\n");
         MachineResumeSignals(signalref);
         return VM_STATUS_SUCCESS;
     }
@@ -620,7 +582,6 @@ TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
  If tick is specified as VM_TIMEOUT_IMMEDIATEthe current process yields the remainder of its processing quantum to the next ready process of equal priority.
  */
 void MachineAlarmCallback(void * calldata){
-    VMPrint("Entering sleep callback \n ");
     globalList.SleepTimerCountdown();
 }
 
@@ -628,13 +589,9 @@ TVMStatus VMThreadSleep(TVMTick tick){
     if (tick == VM_TIMEOUT_INFINITE){
         return VM_STATUS_ERROR_INVALID_PARAMETER;
     }
-    VMPrint("Entering sleep \n");
     globalList.CurrentTCB->SetTicks(tick*1000);
-    VMPrint("Removing from ready \n");
     globalList.RemoveFromReady(globalList.CurrentTCB);
-    VMPrint("After removal \n");
     globalList.AddSleeper();
-    VMPrint("After adding to sleepers \n");
     MachineRequestAlarm(tick, MachineAlarmCallback, NULL);
     return VM_STATUS_SUCCESS;
 
@@ -647,21 +604,28 @@ TVMStatus VMThreadSleep(TVMTick tick){
  The filedescriptor returned can be used in subsequent calls to VMFileClose(), VMFileRead(), VMFileWrite(), and VMFileSeek().
  When a thread calls VMFileOpen() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful opening of the file is completed.
  */
-void FileDescriptorCallback(void* calldata, int result){
-    // Used as a callback to get the FD from the machinefileopen
-    std::cout << "result here " << result << "\n";
-    calldata = &result;
-}
+void MachineCallback(void* calldata, int result){
+    // Cast into THREADID add back to ready queue
+    TCB* localTCB = static_cast<TCB*>(calldata);
+    localTCB->FileDescriptor=result;
+    globalList.AddToReady(localTCB);
+    globalList.Schedule();
+    // Set the thread specified with the ID to ready
+    // Call data holds the ID. USe the TCBIID to set its FD
 
+
+}
 TVMStatus VMFileOpen(const char *filename, int flags, int mode, int *filedescriptor){
     TMachineSignalStateRef signalref;
+    MachineSuspendSignals(signalref);
     if ((filename == NULL) || (filedescriptor == NULL)){
-        std::cout << "Invalid FD | filename" << '\n';
+        MachineResumeSignals(signalref);
         return VM_STATUS_ERROR_INVALID_PARAMETER;
     }
-    std::cout << "Calling machine file open" << '\n';
-    MachineSuspendSignals(signalref);
-    MachineFileOpen(filename, flags, mode, FileDescriptorCallback, filedescriptor);
+
+    MachineFileOpen(filename, flags, mode, MachineCallback, &globalList.CurrentTCB->FileDescriptor);
+    globalList.RemoveFromReady(globalList.CurrentTCB);
+    // globalList.RemoveFromReady(globalList.CurrentTCB->ThreadID);
     MachineResumeSignals(signalref);
 
 };
@@ -698,7 +662,6 @@ TVMStatus VMFileRead(int filedescriptor, void *data, int *length){
  When a thread calls VMFileWrite() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful writing of the file is completed.
  */
 
-
 void EmptyCallback(void *calldata, int result){
     //calldata - passed into the callback function upon completion of the open file request
     //calldata - received from MachineFileOpen()
@@ -716,7 +679,6 @@ TVMStatus VMFileWrite(int filedescriptor, void *data, int *length){
     //void *data;
     //Suspend signals before here? Don't want race
     MachineFileWrite(filedescriptor, data, *length, EmptyCallback, NULL);
-
 };
 
 /*
