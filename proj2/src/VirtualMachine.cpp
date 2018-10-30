@@ -32,7 +32,7 @@ struct TCB {
     SMachineContext *TCBcontext = new SMachineContext; //The TCBs context, used in MachineContextCreate
     void SetState(TVMThreadState pstate);
     void DecrementTicks();
-    void SetTicks(TVMTick ticks);
+    void SetTicks(TVMTick pticks);
     //~TCB();
 };
 
@@ -49,12 +49,12 @@ void TCB::DecrementTicks(){
 }
 
 //The constructor for the TCB.
-TCB::TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ID, uint8_t stack){
-    entry = entry;
+TCB::TCB(TVMThreadEntry pentry, void * pparam, TVMThreadPriority pprio, TVMThreadID pID, uint8_t stack){
+    entry = pentry;
     ticks = 0; //Not sure about this one
-    param = param;
-    prio = prio;
-    ThreadID = ID; // Have to increment locally. This is already done
+    param = pparam;
+    prio = pprio;
+    ThreadID = pID; // Have to increment locally. This is already done
     state = VM_THREAD_STATE_DEAD;
     stack = *new uint8_t[stack];
 }
@@ -118,10 +118,10 @@ void TCBList::SleepTimerCountdown(){
 }
 //Tells the current thread to go to sleep.
 void TCBList::AddSleeper(){
+    VMPrint("Before pushing to list \n");
     SleepingThreads.push_back(CurrentTCB);
-    CurrentTCB = NULL;
-    RemoveFromReady(CurrentTCB->ThreadID);
-
+    VMPrint("After pushing to list \n");
+    VMPrint("After removing the current TCB \n");
 }
 
 void TCBList::SetCurrentThread(TCB* CurrentTCB){
@@ -281,11 +281,15 @@ void scheduler(){
     //figure out what should be running
     //set it to running
     //old thread should be those in ready state, new context should be those in running state
-
-
+    VMPrint("Entering schedule()...\n");
+    TCB* OldTCB = globalList.CurrentTCB;
+    std::cout << "Old ID before: " << OldTCB->ThreadID << "\n";
+    globalList.Schedule();
+    TCB* NewTCB = globalList.CurrentTCB;
     //get thread going to last of global lists
-    TVMThreadID thread = 1; //test placeholder
-    MachineContextSwitch(globalList.FindTCB(thread - 1)->TCBcontext,globalList.FindTCB(thread)->TCBcontext);
+    std::cout << "Old ID after: " << OldTCB->ThreadID << "\n";
+    std::cout << "New ID after: " << NewTCB->ThreadID << "\n";
+    MachineContextSwitch(OldTCB->TCBcontext,NewTCB->TCBcontext);
 }
 void AlarmCallback(void *calldata){
 
@@ -314,7 +318,7 @@ void AlarmCallback(void *calldata){
  in milliseconds of the virtual machine tick is specified by the tickms parameter.
  */
 void IdleCallback(void *calldata){
-    std::cout<<"In Idle"<<"\n";
+    //std::cout<<"In Idle"<<"\n";
     MachineEnableSignals();
     while(1){
         std::cout<<"In Idle"<<"\n";
@@ -445,7 +449,7 @@ TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsiz
     //TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ID, uint8_t stack);
     //ex 1 -> 2
     ++globid;
-    tid = &globid;      //new tid (reference) is location of the new id
+    *tid = globid;      //new tid (reference) is location of the new id
     std::cout<<"globalid: "<<globid<<"\n";
 
     TCB *NewTCB = new TCB(entry, param, prio, *tid, memsize);
@@ -503,6 +507,10 @@ TVMStatus VMThreadActivate(TVMThreadID thread){
         MachineContextCreate(globalList.FindTCB(thread)->TCBcontext, IdleCallback, NULL,  globalList.FindTCB(thread)->stackaddr,0x100000);
         FoundTCB->state = VM_THREAD_STATE_READY;
         globalList.FindTCB(thread)->state = VM_THREAD_STATE_READY;
+        if(globalList.FindTCB(thread)->state == VM_THREAD_STATE_READY){
+            VMPrint("Ready\n");
+            std::cout << "ID: " << thread << "\n";
+        }
         switch (globalList.FindTCB(thread)->prio)
         {
             case VM_THREAD_PRIORITY_LOW:
@@ -531,19 +539,22 @@ TVMStatus VMThreadActivate(TVMThreadID thread){
         {
             case VM_THREAD_STATE_READY:
                 VMPrint("Thread Ready\n");
-                globalList.LowReady.push_back(FoundTCB);
+                //globalList.LowReady.push_back(FoundTCB);
                 break;
             case VM_THREAD_STATE_RUNNING:
                 VMPrint("Thread idle\n");
-                globalList.LowReady.push_back(FoundTCB);
+                //globalList.LowReady.push_back(FoundTCB);
                 break;
             default:
                 VMPrint("setstate failed\n");
                 break;
 
         }
+        globalList.SetCurrentThread(thread);
         //switch old to new
+        VMPrint("Calling schedule()...\n");
         scheduler();
+        VMPrint("After schedule()...\n");
         MachineResumeSignals(signalref);
         return VM_STATUS_SUCCESS;
     }
@@ -609,6 +620,7 @@ TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
  If tick is specified as VM_TIMEOUT_IMMEDIATEthe current process yields the remainder of its processing quantum to the next ready process of equal priority.
  */
 void MachineAlarmCallback(void * calldata){
+    VMPrint("Entering sleep callback \n ");
     globalList.SleepTimerCountdown();
 }
 
@@ -616,9 +628,13 @@ TVMStatus VMThreadSleep(TVMTick tick){
     if (tick == VM_TIMEOUT_INFINITE){
         return VM_STATUS_ERROR_INVALID_PARAMETER;
     }
+    VMPrint("Entering sleep \n");
     globalList.CurrentTCB->SetTicks(tick*1000);
+    VMPrint("Removing from ready \n");
     globalList.RemoveFromReady(globalList.CurrentTCB);
+    VMPrint("After removal \n");
     globalList.AddSleeper();
+    VMPrint("After adding to sleepers \n");
     MachineRequestAlarm(tick, MachineAlarmCallback, NULL);
     return VM_STATUS_SUCCESS;
 
