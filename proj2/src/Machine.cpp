@@ -1,553 +1,777 @@
-#include "Machine.h"
-#include <unistd.h>
-#include <signal.h>
-#include <time.h>
-#include <sys/types.h>
-#include <sys/time.h>
-#include <sys/ipc.h>
-#include <sys/msg.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <poll.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <unistd.h>
+#include <VirtualMachine.h>
+#include <Machine.h>
+#include <iostream>
 #include <vector>
-#include <map>
+#include <array>
+#include <algorithm>
 
-extern "C"{
-#ifndef NULL
-#define NULL (void *)0
-#endif
+/*
+ class VMThread{
+ //MachineContextCreate() //what args to pass?
 
-#define MACHINE_REQUEST_NONE            1
-#define MACHINE_REQUEST_OPEN            2
-#define MACHINE_REQUEST_READ            3
-#define MACHINE_REQUEST_WRITE           4
-#define MACHINE_REQUEST_SEEK            5
-#define MACHINE_REQUEST_CLOSE           6
-#define MACHINE_REQUEST_TERMINATE       7
+ }
+ */
+//globals
+SMachineContext contextGlob;
 
-#define MACHINE_MAX_MESSAGE_SIZE        0x10000
 
-typedef struct{
-    pid_t DParentPID;
-    pid_t DChildPID;
-    int DRequestChannel;
-    int DReplyChannel;
-} SMachineData, *SMachineDataRef;
+int globalTick = 0;
+//TMachineSignalStateRef GlobalSignal; not supposed to be global
+// The Thread control block. One is made for each thread
+struct TCB {
+    TVMThreadEntry entry; // Entry point, what function we will point to
+    int sleeping = 0;
+    void * param;
+    TVMTick ticks;
+    TVMThreadPriority prio;
+    TVMThreadID ThreadID;
+    TVMThreadState state;
+    TVMMemorySize memorysize = 0x100000;
+    uint8_t *stackaddr = new uint8_t[memorysize]; //to use in machine context create
+    uint8_t *stack; // Not sure if this is correct stack base
+    TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ID, uint8_t stack);
+    SMachineContext *TCBcontext = new SMachineContext; //The TCBs context, used in MachineContextCreate
+    void SetState(TVMThreadState pstate);
+    void DecrementTicks();
+    void SetTicks(TVMTick pticks);
+    //~TCB();
+};
 
-typedef struct{
-    TMachineFileCallback DCallback;
-    void *DCalldata;
-    void *DDestination;
-} SMachinePendingCallback, *SMachinePendingCallbackRef;
+//Sets the state of the thread
+void TCB::SetState(TVMThreadState pstate){
+    state=pstate;
+}
 
-typedef struct{
-    long DType;
-    uint32_t DRequestID;
-    uint8_t DPayload[1];
-} SMachineRequest, *SMachineRequestRef;
+void TCB::SetTicks(TVMTick pticks){
+	ticks = pticks;
+}
+void TCB::DecrementTicks(){
+    ticks = ticks - 1;
+}
 
-typedef struct{
-    uint32_t DRequestID;
-    int DFileDescriptor;
-    int DLength;
-} SMachinePendingRead, *SMachinePendingReadRef;
+//The constructor for the TCB.
+TCB::TCB(TVMThreadEntry pentry, void * pparam, TVMThreadPriority pprio, TVMThreadID pID, uint8_t stack){
+    entry = pentry;
+    ticks = 0; //Not sure about this one
+    param = pparam;
+    prio = pprio;
+    ThreadID = pID; // Have to increment locally. This is already done
+    state = VM_THREAD_STATE_DEAD;
+    stack = *new uint8_t[stack];
+}
+//Deconstructor for a thread control block. Is meant to free memory up
+// Not sure if it works rigth now though
+// TCB::~TCB(){
+//     delete stack;
+// }
+TVMThreadID IDCounter = 0;
+struct TCBList{
+    TCB* CurrentTCB;
+    std::vector<TCB*> Tlist;
+    TVMThreadID IDCounter;
+    TCB* FindTCB(TVMThreadID IDnum);
+    TVMThreadID IncrementID();
+    std::vector<TCB*> GetList();
+    TVMThreadID GetID();
+    void AddTCB(TCB*);
+    void RemoveTCB(TVMThreadID IDnum);
+    TVMThreadID NextReadyThread();
+    void SetCurrentThread(TCB* CurrentTCB);
+    void SetCurrentThread(TVMThreadID ID);
+    void RemoveFromReady(TVMThreadID IDnum);
+    void RemoveFromReady(TCB* PassedTCB);
+    void AddToReady(TCB*);
+    void Schedule();
+    TCB* GetCurrentTCB();
+    std::vector<TCB*> SleepingThreads;
+    std::vector<TCB*> HighReady;
+    std::vector<TCB*> MediumReady;
+    std::vector<TCB*> LowReady;
+    void AddSleeper();
+    void SleepTimerCountdown();
+};
 
-static bool MachineInitialized = false;
-static SMachineData MachineData;
-static SMachineContext MachineContextCaller;
-static sig_atomic_t MachineContextCalled;
-static SMachineContextRef MachineContextCreateRef;
-static void (*MachineContextCreateFunction)(void *);
-static void *MachineContextCreateParam;
-static sigset_t MachineContextCreateSignals;
-static int MachineSignalPipe[2];
-static TMachineAlarmCallback MachineAlarmCallback = NULL;
-static void *MachineAlarmCalldata = NULL;
-struct sigaction MachineAlarmActionSave;
-static volatile uint32_t MachineRequestID = 0;
-static std::map< uint32_t , SMachinePendingCallback > MachinePendingCallbacks;
-
-void MachineContextCreateTrampoline(int sig);
-void MachineContextCreateBoot(void);
-
-void MachineContextCreate(SMachineContextRef mcntxref, void (*entry)(void *), void *param, void *stackaddr, size_t stacksize){
-    struct sigaction SigAction;
-    struct sigaction OldSigAction;
-    stack_t SigStack;
-    stack_t OldSigStack;
-    sigset_t OldSigSet;
-    sigset_t SigSet;
-
-    // Step 1:
-    sigemptyset(&SigSet);
-    sigaddset(&SigSet, SIGUSR1);
-    sigprocmask(SIG_BLOCK, &SigSet, &OldSigSet);
-
-    // Step 2:
-    memset((void *)&SigAction, 0, sizeof(struct sigaction));
-    SigAction.sa_handler = MachineContextCreateTrampoline;
-    SigAction.sa_flags = SA_ONSTACK;
-    sigemptyset(&SigAction.sa_mask);
-    sigaction(SIGUSR1, &SigAction, &OldSigAction);
-
-    // Step 3:
-    SigStack.ss_sp = stackaddr;
-    SigStack.ss_size = stacksize;
-    SigStack.ss_flags = 0;
-    sigaltstack(&SigStack, &OldSigStack);
-
-    // Step 4:
-    MachineContextCreateRef = mcntxref;
-    MachineContextCreateFunction = entry;
-    MachineContextCreateParam = param;
-    MachineContextCreateSignals = OldSigSet;
-    MachineContextCalled = false;
-    kill(getpid(), SIGUSR1);
-    sigfillset(&SigSet);
-    sigdelset(&SigSet, SIGUSR1);
-    while (!MachineContextCalled){
-        sigsuspend(&SigSet);
+void TCBList::AddToReady(TCB* FoundTCB){
+    switch (FoundTCB->prio)
+    {
+    case VM_THREAD_PRIORITY_LOW:
+        LowReady.push_back(FoundTCB);
+        break;
+    case VM_THREAD_PRIORITY_NORMAL:
+        MediumReady.push_back(FoundTCB);
+        break;
+    case VM_THREAD_PRIORITY_HIGH:
+        HighReady.push_back(FoundTCB);
+        break;
     }
+}
 
-    // Step 6:
-    sigaltstack(NULL, &SigStack);
-    SigStack.ss_flags = SS_DISABLE;
-    sigaltstack(&SigStack, NULL);
-    if(!(OldSigStack.ss_flags & SS_DISABLE)){
-        sigaltstack(&OldSigStack, NULL);
-    }
-    sigaction(SIGUSR1, &OldSigAction, NULL);
-    sigprocmask(SIG_SETMASK, &OldSigSet, NULL);
-
-    // Step 7 & Step 8:
-    MachineContextSwitch(&MachineContextCaller, mcntxref);
-
-    // Step 14:
+void TCBList::SleepTimerCountdown(){
+    VMPrint("Entering sleep timer \n");
+    for(auto s: SleepingThreads)
+        if (s-> ticks != 0){
+            s->DecrementTicks();
+        }
+    for(auto s: SleepingThreads)
+        if (s -> ticks == 0){
+            AddToReady(s);
+        }
     return;
 }
+//Tells the current thread to go to sleep.
+void TCBList::AddSleeper(){
+    VMPrint("Before pushing to list \n");
+    SleepingThreads.push_back(CurrentTCB);
+    VMPrint("After pushing to list \n");
+    VMPrint("After removing the current TCB \n");
+}
 
-void MachineContextCreateTrampoline(int sig){
-    // Step 5:
-    if(MachineContextSave(MachineContextCreateRef) == 0){
-        MachineContextCalled = true;
-        return;
+void TCBList::SetCurrentThread(TCB* CurrentTCB){
+    CurrentTCB = CurrentTCB;
+}
+void TCBList::SetCurrentThread(TVMThreadID ID){
+	std::cout << "Changing thread \n";
+	CurrentTCB = FindTCB(ID);
+}
+
+TCB* TCBList::GetCurrentTCB(){
+    return CurrentTCB;
+}
+
+TCB* TCBList::FindTCB(TVMThreadID IDnum){
+    for(auto s: Tlist)
+        if (s->ThreadID == IDnum){
+            //std::cout<<"/FindTCB found id: "<<s<<"\n";
+            return s;
+        }
+
+    return NULL;
+}
+
+TVMThreadID TCBList::IncrementID() {
+    return IDCounter = IDCounter + 1;
+}
+
+void TCBList::RemoveFromReady(TCB* PassedTCB){
+    if (CurrentTCB == PassedTCB){
+        CurrentTCB = NULL;
     }
-
-    // Step 9:
-    MachineContextCreateBoot();
+    int i = 0;
+    for(auto s: LowReady)
+        if (s == PassedTCB){
+            LowReady.erase(LowReady.begin()+ i); // Need to remove it from the schedular as well?
+            return;
+        }
+    ++i;
+    i = 0;
+    for(auto s: MediumReady)
+        if (s == PassedTCB){
+            MediumReady.erase(MediumReady.begin()+ i); // Need to remove it from the schedular as well?
+            return;
+        }
+    ++i;
+    i = 0;
+    for(auto s: HighReady)
+        if (s == PassedTCB){
+            HighReady.erase(HighReady.begin()+ i); // Need to remove it from the schedular as well?
+            return;
+        }
+    ++i;
 }
 
-void MachineContextCreateBoot(void){
-    void (*MachineContextStartFunction)(void *);
-    void *MachineContextStartParam;
-
-    // Step 10:
-    sigprocmask(SIG_SETMASK, &MachineContextCreateSignals, NULL);
-
-    // Step 11:
-    MachineContextStartFunction = MachineContextCreateFunction;
-    MachineContextStartParam = MachineContextCreateParam;
-
-    // Step 12 & Step 13:
-    MachineContextSwitch(MachineContextCreateRef, &MachineContextCaller);
-
-    // The thread "magically" starts...
-    MachineContextStartFunction(MachineContextStartParam);
-
-    // NOTREACHED
-    abort();
-}
-
-int MachineGetInt(uint8_t *ptr){
-    int Value = 0;
-    for(size_t Index = 0; Index < sizeof(int); Index++){
-        Value <<= 8;
-        Value |= ptr[Index];
+void TCBList::RemoveFromReady(TVMThreadID IDnum){
+    if (CurrentTCB->ThreadID == IDnum){
+        CurrentTCB = NULL;
     }
-    return Value;
+    int i = 0;
+    for(auto s: LowReady)
+        if (s->ThreadID == IDnum){
+            LowReady.erase(LowReady.begin()+ i); // Need to remove it from the schedular as well?
+            return;
+        }
+    ++i;
+    i = 0;
+    for(auto s: MediumReady)
+        if (s->ThreadID == IDnum){
+            MediumReady.erase(MediumReady.begin()+ i); // Need to remove it from the schedular as well?
+            return;
+        }
+    ++i;
+    i = 0;
+    for(auto s: HighReady)
+        if (s->ThreadID == IDnum){
+            HighReady.erase(HighReady.begin()+ i); // Need to remove it from the schedular as well?
+            return;
+        }
+    ++i;
 }
 
-void MachineSetInt(uint8_t *ptr, int val){
-    for(size_t Index = 0; Index < sizeof(int); Index++){
-        ptr[Index] = (val>>((sizeof(int) - Index - 1) * 8));
-    }
-}
-
-void MachineRequestSignalHandler(int signum){
-    uint8_t TempByte = 0;
-    write(MachineSignalPipe[1],&TempByte, 1);
-}
-
-void MachineReplySignalHandler(int signum){
-    uint8_t Buffer[MACHINE_MAX_MESSAGE_SIZE];
-    SMachineRequestRef MessageRef = (SMachineRequestRef)Buffer;
-    ssize_t MessageSize;
-
-    do{
-        MessageSize = msgrcv(MachineData.DReplyChannel, MessageRef, sizeof(Buffer), 0, IPC_NOWAIT);
-        if(0 < MessageSize){
-            if(MachinePendingCallbacks.end() != MachinePendingCallbacks.find(MessageRef->DRequestID)){
-                SMachinePendingCallback Callinfo = MachinePendingCallbacks[MessageRef->DRequestID];
-                int ReturnValue = MachineGetInt(MessageRef->DPayload);
-                MachinePendingCallbacks.erase(MessageRef->DRequestID);
-                if(MACHINE_REQUEST_READ == MessageRef->DType){
-                    // Copy the data
-                    if(0 < ReturnValue){
-                        memcpy(Callinfo.DDestination, MessageRef->DPayload + sizeof(int), ReturnValue);
-                    }
-                }
-                Callinfo.DCallback(Callinfo.DCalldata, ReturnValue);
+TVMThreadID TCBList::NextReadyThread(){
+    // Finds the next ready thread in the schedular
+    // Returns the ID to it
+    // Also removes the thread from the block
+    if (HighReady.empty()) {
+        if (MediumReady.empty()){
+            if (LowReady.empty()){
+                return 0;
+            }
+            else{
+                return LowReady[0]->ThreadID;
             }
         }
-    }while(0 < MessageSize);
-
-
-}
-
-uint32_t MachineAddRequest(TMachineFileCallback callback, void *calldata, void *dest){
-    SMachinePendingCallback Callback;
-
-    Callback.DCallback = callback;
-    Callback.DCalldata = calldata;
-    Callback.DDestination = dest;
-
-    MachineRequestID++;
-    MachinePendingCallbacks[(uint32_t)MachineRequestID] = Callback;
-    return MachineRequestID;
-}
-
-void MachineSendReply(SMachineRequestRef mess, int length){
-    msgsnd(MachineData.DReplyChannel, mess, length, 0);
-    kill(MachineData.DParentPID, SIGUSR2);
-}
-
-void MachineInitialize(void){
-    TMachineSignalState SigStateSave;
-    struct sigaction OldSigAction, SigAction;
-
-    if(MachineInitialized){
-        return;
-    }
-
-    sigaction(SIGALRM, NULL, &MachineAlarmActionSave);
-    MachineData.DParentPID = getpid();
-    MachineData.DRequestChannel = msgget(IPC_PRIVATE, IPC_CREAT | 0666);
-    if(0 > MachineData.DRequestChannel){
-        fprintf(stderr,"Failed to create message queue: %s\n", strerror(errno));
-        exit(1);
-    }
-    MachineData.DReplyChannel = msgget(IPC_PRIVATE, IPC_CREAT | 0666);
-    if(0 > MachineData.DReplyChannel){
-        fprintf(stderr,"Failed to create message queue: %s\n", strerror(errno));
-        exit(1);
-    }
-
-    MachineSuspendSignals(&SigStateSave);
-
-    MachineData.DChildPID = fork();
-    if(0 == MachineData.DChildPID){
-        bool Terminated = false;
-        std::vector< struct pollfd > PollFDs;
-        std::vector< SMachinePendingRead > PendingReads;
-        uint8_t Buffer[MACHINE_MAX_MESSAGE_SIZE];
-        SMachineRequestRef MessageRef = (SMachineRequestRef)Buffer;
-        ssize_t MessageSize;
-        sigset_t SigMask;
-        int Result, FileDescriptor, Length, Flags, Mode;
-        int Offset, Whence;
-
-        MachineData.DChildPID = getpid();
-        pipe(MachineSignalPipe);
-        PollFDs.resize(1);
-        PollFDs[0].fd = MachineSignalPipe[0];
-        PollFDs[0].events = POLLIN;
-        PollFDs[0].revents = 0;
-        memset((void *)&SigAction, 0, sizeof(struct sigaction));
-        SigAction.sa_handler = MachineRequestSignalHandler;
-        sigemptyset(&SigAction.sa_mask);
-        sigaction(SIGUSR2, &SigAction, &OldSigAction);
-
-        MachineEnableSignals();
-        while(!Terminated){
-            sigemptyset(&SigMask);
-            PollFDs[0].events = POLLIN;
-            PollFDs[0].revents = 0;
-            Result = poll(PollFDs.data(), PollFDs.size(), 1);
-            if((0 < Result)&&(PollFDs[0].revents)){
-                SMachinePendingRead PendingRead;
-                bool Found;
-                uint8_t TempByte;
-
-                read(PollFDs[0].fd, &TempByte, 1);
-                while(true){
-                    MessageSize = msgrcv(MachineData.DRequestChannel, MessageRef, sizeof(Buffer), 0, IPC_NOWAIT);
-                    if(0 < MessageSize){
-                        switch(MessageRef->DType){
-                            case MACHINE_REQUEST_NONE:          break;
-                            case MACHINE_REQUEST_OPEN:          Flags = MachineGetInt(MessageRef->DPayload + strlen((char *)MessageRef->DPayload) + 1);
-                                                                Mode = MachineGetInt(MessageRef->DPayload + strlen((char *)MessageRef->DPayload) + sizeof(int) + 1);
-                                                                FileDescriptor = open((char *)MessageRef->DPayload, Flags, Mode);
-                                                                MachineSetInt(MessageRef->DPayload, FileDescriptor);
-                                                                MachineSendReply(MessageRef,sizeof(SMachineRequest) + sizeof(int) - 1);
-                                                                break;
-                            case MACHINE_REQUEST_READ:          PendingRead.DRequestID = MessageRef->DRequestID;
-                                                                PendingRead.DFileDescriptor = MachineGetInt(MessageRef->DPayload);
-                                                                PendingRead.DLength = MachineGetInt(MessageRef->DPayload + sizeof(int));
-                                                                Found = false;
-                                                                for(size_t Index = 0; Index < PollFDs.size(); Index++){
-                                                                    if(PollFDs[Index].fd == PendingRead.DFileDescriptor){
-                                                                        Found = true;
-                                                                        break;
-                                                                    }
-                                                                }
-                                                                if(!Found){
-                                                                    struct pollfd NewReadFD;
-
-                                                                    NewReadFD.fd = PendingRead.DFileDescriptor;
-                                                                    NewReadFD.events = POLLIN;
-                                                                    NewReadFD.revents = 0;
-                                                                    PollFDs.push_back(NewReadFD);
-                                                                }
-                                                                PendingReads.push_back(PendingRead);
-                                                                break;
-                            case MACHINE_REQUEST_WRITE:         FileDescriptor = MachineGetInt(MessageRef->DPayload);
-                                                                Length = MachineGetInt(MessageRef->DPayload + sizeof(int));
-                                                                Result = write(FileDescriptor, MessageRef->DPayload + sizeof(int) * 2, Length);
-                                                                MachineSetInt(MessageRef->DPayload, Result);
-                                                                MachineSendReply(MessageRef,sizeof(SMachineRequest) + sizeof(int) - 1);
-                                                                break;
-                            case MACHINE_REQUEST_SEEK:          FileDescriptor = MachineGetInt(MessageRef->DPayload);
-                                                                Offset = MachineGetInt(MessageRef->DPayload + sizeof(int));
-                                                                Whence = MachineGetInt(MessageRef->DPayload + sizeof(int) * 2);
-                                                                Offset = lseek(FileDescriptor, Offset, Whence);
-                                                                MachineSetInt(MessageRef->DPayload, Offset);
-                                                                MachineSendReply(MessageRef,sizeof(SMachineRequest) + sizeof(int) - 1);
-                                                                break;
-                            case MACHINE_REQUEST_CLOSE:         FileDescriptor = close(MachineGetInt(MessageRef->DPayload));
-                                                                MachineSetInt(MessageRef->DPayload, FileDescriptor);
-                                                                MachineSendReply(MessageRef,sizeof(SMachineRequest) + sizeof(int) - 1);
-                                                                break;
-                            case MACHINE_REQUEST_TERMINATE:     Terminated = true;
-                            default:                            break;
-                        }
-                    }
-                    else{
-                        break;
-                    }
-                }
-            }
-            else if(0 == Result){
-                if(0 > kill(MachineData.DParentPID, 0)){
-                    if(ESRCH == errno){
-                        Terminated = true;
-                    }
-                }
-            }
-            for(size_t Index = 1; Index < PollFDs.size(); Index++){
-                if(PollFDs[Index].revents){
-                    for(size_t ReadIndex = 0; ReadIndex < PendingReads.size(); ReadIndex++){
-                        if(PendingReads[ReadIndex].DFileDescriptor == PollFDs[Index].fd){
-                            Result = read(PendingReads[ReadIndex].DFileDescriptor,MessageRef->DPayload + sizeof(int), PendingReads[ReadIndex].DLength);
-                            MessageRef->DRequestID = PendingReads[ReadIndex].DRequestID;
-                            MachineSetInt(MessageRef->DPayload, Result);
-                            MachineSendReply(MessageRef,sizeof(SMachineRequest) + sizeof(int) - 1 + (Result > 0 ? Result : 0));
-                            PendingReads.erase(PendingReads.begin() + ReadIndex);
-                            break;
-                        }
-                    }
-                }
-            }
-            for(size_t Index = 1; Index < PollFDs.size();){
-                bool Found = false;
-                for(size_t ReadIndex = 0; ReadIndex < PendingReads.size(); ReadIndex++){
-                    if(PendingReads[ReadIndex].DFileDescriptor == PollFDs[Index].fd){
-                        Found = true;
-                    }
-                }
-                if(Found){
-                    Index++;
-                }
-                else{
-                    PollFDs.erase(PollFDs.begin() + Index);
-                }
-            }
+        else {
+            return MediumReady[0]->ThreadID;
         }
-        msgctl(MachineData.DRequestChannel, IPC_RMID, NULL);
-        msgctl(MachineData.DReplyChannel, IPC_RMID, NULL);
-        sigaction(SIGUSR2, &OldSigAction, NULL);
-        MachineResumeSignals(&SigStateSave);
-        close(MachineSignalPipe[0]);
-        close(MachineSignalPipe[1]);
-        exit(0);
     }
-    memset((void *)&SigAction, 0, sizeof(struct sigaction));
-    SigAction.sa_handler = MachineReplySignalHandler;
-    sigemptyset(&SigAction.sa_mask);
-    sigaction(SIGUSR2, &SigAction, &OldSigAction);
-    MachineInitialized = true;
-    MachineResumeSignals(&SigStateSave);
-}
-
-void MachineTerminate(void){
-    if(MachineInitialized){
-        TMachineSignalState SignalState;
-        uint8_t Buffer[MACHINE_MAX_MESSAGE_SIZE];
-        SMachineRequestRef MessageRef = (SMachineRequestRef)Buffer;
-        int Status;
-
-        MachineSuspendSignals(&SignalState);
-
-        sigaction(SIGALRM, &MachineAlarmActionSave, NULL);
-
-        MessageRef->DType = MACHINE_REQUEST_TERMINATE;
-        ualarm(0,0);
-        MessageRef->DRequestID = MachineAddRequest(NULL, NULL, NULL);
-        Status = msgsnd(MachineData.DRequestChannel, MessageRef, sizeof(SMachineRequest) - 1, 0);
-        kill(MachineData.DChildPID, SIGUSR2);
-        wait(&Status);
-        MachineResumeSignals(&SignalState);
-    }
-
-}
-
-void MachineEnableSignals(void){
-    sigset_t NewSigset, OldSigset;
-    sigfillset(&NewSigset);
-    sigprocmask(SIG_UNBLOCK, &NewSigset, &OldSigset);
-}
-
-void MachineSuspendSignals(TMachineSignalStateRef sigstate){
-    sigset_t NewSigset;
-    sigfillset(&NewSigset);
-    sigprocmask(SIG_BLOCK, &NewSigset, sigstate);
-}
-
-void MachineResumeSignals(TMachineSignalStateRef sigstate){
-    sigset_t OldSigset;
-
-    sigprocmask(SIG_SETMASK, sigstate, &OldSigset);
-}
-
-void MachineAlarmSignalHandler(int signum){
-    if(MachineAlarmCallback){
-        MachineAlarmCallback(MachineAlarmCalldata);
+    else{
+        return HighReady[0]->ThreadID;
     }
 }
+void TCBList::Schedule(){
+    TVMThreadID NextReadyID = NextReadyThread();
+    RemoveFromReady(NextReadyID);
+    SetCurrentThread(NextReadyID);
+}
+TVMThreadID TCBList::GetID(){
+    return IDCounter;
+}
 
-void MachineRequestAlarm(useconds_t usec, TMachineAlarmCallback callback, void *calldata){
-    if(MachineInitialized){
-        struct sigaction NewAction;
+std::vector<TCB*> TCBList::GetList(){
+    return Tlist;
+}
 
-        memset((void *)&NewAction, 0, sizeof(struct sigaction));
-        NewAction.sa_handler = MachineAlarmSignalHandler;
-        sigfillset(&NewAction.sa_mask);
-        sigdelset(&NewAction.sa_mask, SIGALRM);
-        NewAction.sa_flags = SA_NODEFER;
+void TCBList::AddTCB(TCB *TCB){
+    Tlist.push_back(TCB);
+}
 
-        MachineAlarmCallback = callback;
-        MachineAlarmCalldata = calldata;
-        sigaction(SIGALRM, &NewAction, &MachineAlarmActionSave);
-        ualarm(usec * 2, usec);
+void TCBList::RemoveTCB(TVMThreadID IDnum){
+    // Removes the current running thread if it is the one
+    if (CurrentTCB->ThreadID == IDnum){
+        CurrentTCB = NULL;
+    }
+    int i = 0;
+    for(auto s: Tlist)
+        if (s->ThreadID == IDnum){
+            Tlist.erase(Tlist.begin()+ i); // Need to remove it from the schedular as well?
+            return;
+        }
+    ++i;
+}
+
+TCBList globalList = TCBList();
+TVMThreadID globid;
+// std::list <TVMThreadID*> sleepingThreads;
+
+//TA says list necessary, shaky on why, maybe b/c mem non contiguous
+//non contig ref:  https://techdifferences.com/difference-between-contiguous-and-non-contiguous-memory-allocation.html
+//So this can be used for sleeping threads existing in non-contigous threads, i.e. thread 1,5 alseep @far away mem locs
+
+
+/*
+ void TCB::TCB(){
+
+ }
+ */
+extern "C" {
+    typedef void (*TVMMainEntry)(int, char*[]);  //This is why were couldn't access the fn in main LOL
+    TVMMainEntry VMLoadModule(const char *module);
+    void VMUnloadModule(void);
+    TVMStatus VMFilePrint(int filedescriptor, const char *format, ...);
+}
+void scheduler(){
+    //access our lists of priority
+    //figure out what should be running
+    //set it to running
+    //old thread should be those in ready state, new context should be those in running state
+    VMPrint("Entering schedule()...\n");
+    TCB* OldTCB = globalList.CurrentTCB;
+    std::cout << "Old ID before: " << OldTCB->ThreadID << "\n";
+    globalList.Schedule();
+    //globalList.CurrentTCB = 0;
+    TCB* NewTCB = globalList.CurrentTCB;
+    //get thread going to last of global lists
+    std::cout << "Old ID after: " << OldTCB->ThreadID << "\n";
+    std::cout << "New ID after: " << NewTCB->ThreadID << "\n";
+    /*
+    if(OldTCB->sleeping = 1){
+        MachineContextSwitch(OldTCB->TCBcontext,NewTCB->TCBcontext);
+    }
+    */
+    if(OldTCB->ThreadID == NewTCB->ThreadID){
+        std::cout << "****NO CHANGE " << "\n";
+        VMPrint("***NO CHANGE");
+    }
+    else{
+        std::cout << "****YES CHANGE " << "\n";
+        VMPrint("***YES CHANGE");
+    }
+
+    MachineContextSwitch(OldTCB->TCBcontext,NewTCB->TCBcontext);
+}
+void AlarmCallback(void *calldata){
+    VMPrint("in alarm callback");
+    TMachineSignalStateRef signalref;
+    MachineSuspendSignals(signalref);
+    //for all threads
+    int i = 50000;
+    while(i>0){
+        i--;
+    };
+        //add sleep count
+
+        //if sleep count = 0, change the state to ready
+        //else decrement by one
+
+    scheduler();
+    MachineResumeSignals(signalref);
+
+    //sleeping thread decrement
+
+    //all others increment
+}
+
+
+
+/*!
+ VMStart() starts the virtual machine by loading the module specified by argv [0]. The argc and argv
+ are passed directly into the VMMain() function that exists in the loaded module. The time
+ in milliseconds of the virtual machine tick is specified by the tickms parameter.
+ */
+void IdleCallback(void *calldata){
+    //std::cout<<"In Idle"<<"\n";
+    MachineEnableSignals();
+    while(1){
+        std::cout<<"In Idle"<<"\n";
+    }
+    ;
+}
+
+void EmptyThreadCallback(void *calldata){
+    //calldata - passed into the callback function upon completion of the open file request
+    //calldata - received from MachineFileOpen()
+    //result - new file descriptor
+    ;
+}
+void skeleton(void *param){     //we use this to switch to the correct context
+   // MachineEnableSignals();
+    //param->entry
+}
+
+TVMStatus VMStart(int tickms, int argc, char *argv[]){
+    std::cout<<"/VMStart"<<"\n";
+    VMPrint("Machine not initialized, will not print\n"); //wont print
+
+    MachineInitialize();
+    VMPrint("\nMachine Initialized\n");
+    MachineEnableSignals();
+    VMPrint("Sig Enabled\n");
+
+    // Returns Null if fails to load
+    TVMMainEntry entry = VMLoadModule(argv[0]);
+    if (entry == NULL) {
+        std::cout << "Failed to load \n";
+    }
+    else{
+        std::cout << "Loaded module \n";
+    }
+
+
+    //TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
+    TVMThreadID idleID;
+    TVMThreadID maintid = 0;
+    TVMMemorySize memorysize = 0x100000;
+
+    //main thread
+    //id - 0 (we don't use VMThreadCreate so that id can be 0)
+    std::cout<<"\n";
+    std::cout<<"/Create main Thread"<<"\n";
+    VMPrint("VM creating main thread\n");
+    TVMThreadPriority mainpriority = VM_THREAD_PRIORITY_NORMAL;
+    TCB *maintcb = new TCB(EmptyThreadCallback, NULL, mainpriority, maintid, memorysize);
+    globalList.AddTCB(maintcb);
+
+    //Idle Thread
+    //id = 1
+    //TVMThreadID idleID = VM_THREAD_ID_INVALID; // decrements the thread ID
+    // TVMThreadPriority 0x00 -> lower than low (0x01)
+    std::cout<<"/Create idle Thread"<<"\n";
+    VMPrint("VM creating idle thread\n");
+    VMThreadCreate(IdleCallback, NULL, memorysize,  ((TVMThreadPriority)0x00), &idleID);
+    TCB* IdleTCB = globalList.FindTCB(1);
+
+
+    MachineRequestAlarm(tickms * 100, AlarmCallback, NULL);
+    // MachineContextCreate(globalList.FindTCB(thread)->TCBcontext, IdleCallback, NULL,  globalList.FindTCB(thread)->stackaddr,0x100000);
+
+    //std::cout<<"Activate idle Thread [id: "<< idleID << &idleID<<"\n";
+    //VMThreadActivate(1); //idleID = 1
+
+
+    MachineContextCreate(IdleTCB->TCBcontext,IdleCallback, NULL, globalList.FindTCB(maintid)->stackaddr,0x100000);
+    MachineEnableSignals();
+    entry(argc, argv);
+    MachineTerminate();
+    VMUnloadModule();
+    return VM_STATUS_SUCCESS;
+
+};
+
+/*!
+ VMTickMS() puts tick time interval in milliseconds in the location specified by tickmsref.
+ This is the value tickmsfrom the previous call to VMStart().
+ */
+TVMStatus VMTickMS(int *tickmsref){
+    if(tickmsref){
+        TMachineSignalStateRef signalref;
+        MachineSuspendSignals(signalref);
+        *tickmsref = globalTick;
+        MachineResumeSignals(signalref);
+
+        return VM_STATUS_SUCCESS;
+    }
+    else{
+        return VM_STATUS_ERROR_INVALID_PARAMETER;
+    }
+};
+
+/*
+ VMTickCount() puts the number of ticks that have occurred since the start of the virtual machine in the location specified by tickref.
+ */
+TVMStatus VMTickCount(TVMTickRef tickref){
+    if (tickref == NULL){
+        return VM_STATUS_ERROR_INVALID_PARAMETER;
+    }
+    else {
+        //code
+        return VM_STATUS_SUCCESS;
+    }
+};
+
+/*
+ VMThreadCreate() creates a thread in the virtual machine.Once created the thread is in the dead state VM_THREAD_STATE_DEAD.
+ The entryparameter specifies the function of the thread, and paramspecifies the parameter that is passed to the function.
+ The size of the threads stack is specified by memsize, and the priority is specified by prio.
+ The thread identifier is put into the location specified by the tidparameter.
+ */
+TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
+    TMachineSignalStateRef signalref;
+    std::cout<<"/VMThreadCreate"<<"\n";
+    VMPrint("Create thread\n");
+    MachineSuspendSignals(signalref); //suspend threads so we can run
+    //VMPrint("Create thread\n");
+    if ((entry == NULL) || (tid == NULL)){
+        VMPrint("NO Create\n");
+        return VM_STATUS_ERROR_INVALID_PARAMETER;
+
+    }
+    //TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ThreadID, TVMThreadState state, uint8_t stack);
+
+    //TCB(TVMThreadEntry entry, void * param, TVMThreadPriority prio, TVMThreadID ID, uint8_t stack);
+    //ex 1 -> 2
+    ++globid;
+    *tid = globid;      //new tid (reference) is location of the new id
+    std::cout<<"globalid: "<<globid<<"\n";
+
+    TCB *NewTCB = new TCB(entry, param, prio, *tid, memsize);
+    globalList.AddTCB(NewTCB);
+
+    if(NewTCB->entry){
+        VMPrint("entry correctly loaded in TCB\n");
+    }
+    else{
+         VMPrint("Not correct \n");
+    }
+    // Add it to the list
+    MachineResumeSignals(signalref);
+    return VM_STATUS_SUCCESS;
+    //VMThreadState(tid, running);
+    //Allocate space for thread
+};
+
+/*
+ VMThreadDelete()deletes the dead thread specified by threadparameter from the virtual machine.
+ */
+TVMStatus VMThreadDelete(TVMThreadID thread){
+    TCB* FoundTCB = globalList.FindTCB(thread);
+    if (FoundTCB == NULL){
+        return VM_STATUS_ERROR_INVALID_ID;
+    }
+    else if (FoundTCB->state != VM_THREAD_STATE_DEAD){
+        return VM_STATUS_ERROR_INVALID_STATE;
+    }
+    else {
+        // Remove the thread from the scheduler too?
+        // No/ BC the thread should be dead
+        globalList.RemoveTCB(thread);
+        return VM_STATUS_SUCCESS;
+    }
+};
+
+/*
+ VMThreadActivate()activates the dead thread specified by threadparameter in the virtual machine.
+ After activation the thread enters the ready state VM_THREAD_STATE_READY, and must begin at the entryfunction specified.
+ */
+TVMStatus VMThreadActivate(TVMThreadID thread){
+    std::cout<<"/VMThreadActivate"<<"\n";
+    VMPrint("\nACTIVATING\n");
+    TMachineSignalStateRef signalref;
+    MachineSuspendSignals(signalref);
+    std::cout<<"/Activate ID: " <<thread<<"\n";
+
+    TCB* FoundTCB = globalList.FindTCB(thread);
+    if (FoundTCB == NULL){
+        VMPrint("NO TCB\n");
+        MachineResumeSignals(signalref);
+        return VM_STATUS_ERROR_INVALID_ID;
+    }
+    else if (FoundTCB->state != VM_THREAD_STATE_DEAD){
+        VMPrint("TCB Not dead\n");
+        MachineResumeSignals(signalref);
+        return VM_STATUS_ERROR_INVALID_STATE;
+    }
+    else {
+        VMPrint("Else (TCB dead)\n");
+        MachineContextCreate(globalList.FindTCB(thread)->TCBcontext, FoundTCB->entry, NULL,  globalList.FindTCB(thread)->stackaddr,0x100000);
+        FoundTCB->state = VM_THREAD_STATE_READY;
+        globalList.FindTCB(thread)->state = VM_THREAD_STATE_READY;
+        if(globalList.FindTCB(thread)->state == VM_THREAD_STATE_READY){
+            VMPrint("Ready\n");
+            std::cout << "ID: " << thread << "\n";
+        }
+        switch (globalList.FindTCB(thread)->prio)
+        {
+            case VM_THREAD_PRIORITY_LOW:
+                VMPrint("low\n");
+                globalList.LowReady.push_back(FoundTCB);
+                break;
+            case VM_THREAD_PRIORITY_NORMAL:
+                VMPrint("norm\n");
+                globalList.MediumReady.push_back(FoundTCB);
+                break;
+            case VM_THREAD_PRIORITY_HIGH:
+                VMPrint("high\n");
+                globalList.HighReady.push_back(FoundTCB);
+                break;
+            case ((TVMThreadPriority)0x00):
+                VMPrint("idle\n");
+                FoundTCB->state = VM_THREAD_STATE_READY;
+                break;
+            default:
+                VMPrint("no prio\n");
+                break;
+        }
+        // globalList.FindTCB(thread)->state = VM_THREAD_STATE_READY;
+        //FoundTCB->state = VM_THREAD_STATE_READY;
+        switch (globalList.FindTCB(thread)->state)
+        {
+            case VM_THREAD_STATE_READY:
+                VMPrint("Thread Ready\n");
+                //globalList.LowReady.push_back(FoundTCB);
+                break;
+            case VM_THREAD_STATE_RUNNING:
+                VMPrint("Thread idle\n");
+                //globalList.LowReady.push_back(FoundTCB);
+                break;
+            default:
+                VMPrint("setstate failed\n");
+                break;
+
+        }
+        globalList.SetCurrentThread(thread);
+        //switch old to new
+        VMPrint("Calling schedule()...\n");
+        scheduler();
+        globalList.CurrentTCB->entry;
+        VMPrint("After schedule()...\n");
+        MachineResumeSignals(signalref);
+        return VM_STATUS_SUCCESS;
+    }
+};
+
+/*
+ VMThreadTerminate()terminates the thread specified by threadparameter in the virtual machine.
+ After termination the thread entersthe state VM_THREAD_STATE_DEAD.
+ The termination of a thread can triMachineFileWritegger another thread to be scheduled.
+ */
+TVMStatus VMThreadTerminate(TVMThreadID thread){
+    TCB* FoundTCB = globalList.FindTCB(thread);
+    if (FoundTCB == NULL){
+        return VM_STATUS_ERROR_INVALID_ID;
+    }
+    else if (FoundTCB->state != VM_THREAD_STATE_DEAD){
+        return VM_STATUS_ERROR_INVALID_STATE;
+    }
+    else {
+        // Also need to stop it running
+        globalList.RemoveFromReady(FoundTCB);
+        FoundTCB->SetState(VM_THREAD_STATE_DEAD);
+        //Schedule it
+        globalList.Schedule();
+        // Move it to dead
+
+        return VM_STATUS_SUCCESS;
+    }
+};
+
+/*
+ VMThreadID() puts the thread identifier of the currently running thread in the location specified by threadref.
+ */
+TVMStatus VMThreadID(TVMThreadIDRef threadref){
+    if (threadref == NULL){
+        return VM_STATUS_ERROR_INVALID_PARAMETER;
+    }
+    //No idea how to do this one
+    //Needs to be current operating thread?
+    threadref = &globalList.GetCurrentTCB()->ThreadID;
+    return VM_STATUS_SUCCESS;
+};
+
+/*
+ VMThreadState() retrieves the state of the thread specified by threadand places the state in the location specified by state.
+ */
+TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
+    TCB* FoundTCB = globalList.FindTCB(thread);
+    if (FoundTCB == NULL){
+        return VM_STATUS_ERROR_INVALID_ID;
+    }
+    else if (stateref == NULL){
+        return VM_STATUS_ERROR_INVALID_PARAMETER;
+    }
+    else{
+        stateref = &FoundTCB -> state;
+        return VM_STATUS_SUCCESS;
+    }
+};
+
+/*
+ VMThreadSleep() puts the currently running thread to sleep for tick ticks.
+ If tick is specified as VM_TIMEOUT_IMMEDIATEthe current process yields the remainder of its processing quantum to the next ready process of equal priority.
+ */
+void MachineAlarmCallback(void * calldata){
+    VMPrint("Entering sleep callback \n ");
+    while (globalList.CurrentTCB->ticks != 0){
+        globalList.SleepTimerCountdown();
     }
 }
 
-void MachineFileOpen(const char *filename, int flags, int mode, TMachineFileCallback callback, void *calldata){
-    if(MachineInitialized){
-        TMachineSignalState SignalState;
-        uint8_t Buffer[MACHINE_MAX_MESSAGE_SIZE];
-        SMachineRequestRef MessageRef = (SMachineRequestRef)Buffer;
+TVMStatus VMThreadSleep(TVMTick tick){
+    //TMachineSignalStateRef signalref;
+    //MachineSuspendSignals(signalref);
+    TVMMemorySize memorysize = 0x100000;
+    TVMThreadID sleepThreadID;
+    VMThreadCreate(AlarmCallback,NULL,memorysize,VM_THREAD_PRIORITY_HIGH, &sleepThreadID);
+    VMThreadActivate(sleepThreadID);
+    //scheduler();
 
-        MessageRef->DType = MACHINE_REQUEST_OPEN;
-        strcpy((char *)MessageRef->DPayload, filename);
-        MachineSetInt(MessageRef->DPayload + strlen(filename) + 1, flags);
-        MachineSetInt(MessageRef->DPayload + strlen(filename) + sizeof(int) + 1, mode);
-
-        MachineSuspendSignals(&SignalState);
-        MessageRef->DRequestID = MachineAddRequest(callback, calldata, NULL);
-        msgsnd(MachineData.DRequestChannel, MessageRef, sizeof(SMachineRequest) + strlen(filename) + sizeof(int), 0);
-        kill(MachineData.DChildPID, SIGUSR2);
-        MachineResumeSignals(&SignalState);
+    if (tick == VM_TIMEOUT_INFINITE){
+        return VM_STATUS_ERROR_INVALID_PARAMETER;
     }
+    //while(1);
+//    while(tick>0){
+//        tick--;a
+//        VMPrint("ticks");
+//        //std::cout<<"ticks: " << tick << "\n";
+//    }
+    VMPrint("Entering sleep \n");
+    globalList.CurrentTCB->SetTicks(tick);
+    VMPrint("Removing from ready \n");
+    globalList.RemoveFromReady(globalList.CurrentTCB);
+    VMPrint("After removal \n");
+    globalList.AddSleeper();
+    VMPrint("After adding to sleepers \n");
+    MachineRequestAlarm(tick*1000, MachineAlarmCallback, NULL);
+    //MachineResumeSignals(signalref);
+    return VM_STATUS_SUCCESS;
+
+};
+
+/*
+ VMFileOpen()attempts to open the file specified by filename, using the flags specified by flagsparameter, and mode specified by modeparameter.
+ The file descriptor of the newly opened file will be placed in the location specified by filedescriptor.
+ The flags and mode values follow the same format as that of open system call.
+ The filedescriptor returned can be used in subsequent calls to VMFileClose(), VMFileRead(), VMFileWrite(), and VMFileSeek().
+ When a thread calls VMFileOpen() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful opening of the file is completed.
+ */
+void FileDescriptorCallback(void* calldata, int result){
+    // Used as a callback to get the FD from the machinefileopen
+    std::cout << "result here " << result << "\n";
+    calldata = &result;
 }
 
-void MachineFileRead(int fd, void *data, int length, TMachineFileCallback callback, void *calldata){
-    if(MachineInitialized){
-        TMachineSignalState SignalState;
-        uint8_t Buffer[MACHINE_MAX_MESSAGE_SIZE];
-        SMachineRequestRef MessageRef = (SMachineRequestRef)Buffer;
-
-        MessageRef->DType = MACHINE_REQUEST_READ;
-        MachineSetInt(MessageRef->DPayload, fd);
-        MachineSetInt(MessageRef->DPayload + sizeof(int), length);
-
-        MachineSuspendSignals(&SignalState);
-        MessageRef->DRequestID = MachineAddRequest(callback, calldata, data);
-        msgsnd(MachineData.DRequestChannel, MessageRef, sizeof(SMachineRequest) + 2 * sizeof(int) - 1, 0);
-        kill(MachineData.DChildPID, SIGUSR2);
-        MachineResumeSignals(&SignalState);
+TVMStatus VMFileOpen(const char *filename, int flags, int mode, int *filedescriptor){
+    TMachineSignalStateRef signalref;
+    MachineSuspendSignals(signalref);
+    if ((filename == NULL) || (filedescriptor == NULL)){
+        std::cout << "Invalid FD | filename" << '\n';
+        return VM_STATUS_ERROR_INVALID_PARAMETER;
     }
+    std::cout << "Calling machine file open" << '\n';
+    MachineFileOpen(filename, flags, mode, FileDescriptorCallback, filedescriptor);
+    MachineResumeSignals(signalref);
+
+};
+void EmptyCallback2(void *calldata, int result){
+    //calldata - passed into the callback function upon completion of the open file request
+    //calldata - received from MachineFileOpen()
+    //result - new file descriptor
+    ;
 }
 
-void MachineFileWrite(int fd, void *data, int length, TMachineFileCallback callback, void *calldata){
-    if(MachineInitialized){
-        TMachineSignalState SignalState;
-        uint8_t Buffer[MACHINE_MAX_MESSAGE_SIZE];
-        SMachineRequestRef MessageRef = (SMachineRequestRef)Buffer;
-
-        MessageRef->DType = MACHINE_REQUEST_WRITE;
-        MachineSetInt(MessageRef->DPayload, fd);
-        MachineSetInt(MessageRef->DPayload + sizeof(int), length);
-        memcpy(MessageRef->DPayload + sizeof(int) * 2, data, length);
-
-        MachineSuspendSignals(&SignalState);
-        MessageRef->DRequestID = MachineAddRequest(callback, calldata, NULL);
-        msgsnd(MachineData.DRequestChannel, MessageRef, sizeof(SMachineRequest) + 2 * sizeof(int) + length - 1, 0);
-        kill(MachineData.DChildPID, SIGUSR2);
-        MachineResumeSignals(&SignalState);
-    }
+/*
+ VMFileClose() closes a file previously opened with a call to VMFileOpen().
+ When a thread calls VMFileClose() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful closing of the file is completed.
+ */
+TVMStatus VMFileClose(int filedescriptor){
+    MachineFileClose(filedescriptor, EmptyCallback2, NULL);
 }
 
-void MachineFileSeek(int fd, int offset, int whence, TMachineFileCallback callback, void *calldata){
-    if(MachineInitialized){
-        TMachineSignalState SignalState;
-        uint8_t Buffer[MACHINE_MAX_MESSAGE_SIZE];
-        SMachineRequestRef MessageRef = (SMachineRequestRef)Buffer;
-
-        MessageRef->DType = MACHINE_REQUEST_SEEK;
-        MachineSetInt(MessageRef->DPayload, fd);
-        MachineSetInt(MessageRef->DPayload + sizeof(int), offset);
-        MachineSetInt(MessageRef->DPayload + sizeof(int) * 2, whence);
-
-        MachineSuspendSignals(&SignalState);
-        MessageRef->DRequestID = MachineAddRequest(callback, calldata, NULL);
-        msgsnd(MachineData.DRequestChannel, MessageRef, sizeof(SMachineRequest) + 3 * sizeof(int) - 1, 0);
-        kill(MachineData.DChildPID, SIGUSR2);
-        MachineResumeSignals(&SignalState);
+/*
+ VMFileRead() attempts to read the number of bytes specified in the integer referenced by lengthinto the location specified by datafrom the file specified by filedescriptor.
+ The filedescriptorshould have been obtained by a previous call to VMFileOpen(). The actual number of bytes transferred by the read will be updated in the lengthlocation.
+ When a thread calls VMFileRead() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful reading of the file is completed.
+ */
+TVMStatus VMFileRead(int filedescriptor, void *data, int *length){
+    if ((data==NULL) ||(length == NULL)){
+        return VM_STATUS_ERROR_INVALID_PARAMETER;
     }
+    //Need to check if we succeed or fail
 }
 
-void MachineFileClose(int fd, TMachineFileCallback callback, void *calldata){
-    if(MachineInitialized){
-        TMachineSignalState SignalState;
-        uint8_t Buffer[MACHINE_MAX_MESSAGE_SIZE];
-        SMachineRequestRef MessageRef = (SMachineRequestRef)Buffer;
+/*
+ VMFileWrite() attempts to write the number of bytes specified in the integer referenced by length from the location specified by data to the file specified by filedescriptor.
+ The filedescriptorshould have been obtained by a previous call to VMFileOpen(). The actual number of bytes transferred by the write will be updated in the lengthlocation.
+ When a thread calls VMFileWrite() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful writing of the file is completed.
+ */
 
-        MessageRef->DType = MACHINE_REQUEST_CLOSE;
-        MachineSetInt(MessageRef->DPayload, fd);
 
-        MachineSuspendSignals(&SignalState);
-        MessageRef->DRequestID = MachineAddRequest(callback, calldata, NULL);
-        msgsnd(MachineData.DRequestChannel, MessageRef, sizeof(SMachineRequest) + sizeof(int) - 1, 0);
-        kill(MachineData.DChildPID, SIGUSR2);
-        MachineResumeSignals(&SignalState);
-    }
+void EmptyCallback(void *calldata, int result){
+    //calldata - passed into the callback function upon completion of the open file request
+    //calldata - received from MachineFileOpen()
+    //result - new file descriptor
+    ;
 }
 
-} // End of extern "C"
+TVMStatus VMFileWrite(int filedescriptor, void *data, int *length){
+    if ((data==NULL) ||(length == NULL)){
+        return VM_STATUS_ERROR_INVALID_PARAMETER;
+    }
+    //Just a call to other things?
+    //TMachineFileCallback callback;
+    //get filedescriptor from VMFILEOPEN()
+    //void *data;
+    //Suspend signals before here? Don't want race
+    MachineFileWrite(filedescriptor, data, *length, EmptyCallback, NULL);
+
+};
+
+/*
+ VMFileSeek() attempts to seek the number of bytes specified by offsetfrom the location specified by whencein the file specified by filedescriptor.
+ The filedescriptorshould have been obtained by a previous call to VMFileOpen(). The new offset placed in the newoffsetlocation if the parameter is not NULL.
+ When a thread calls VMFileSeek() it blocks in the wait state VM_THREAD_STATE_WAITING until the either successful or unsuccessful seeking inthe file is completed.
+ */
+TVMStatus VMFileSeek(int filedescriptor, int offset, int whence, int *newoffset){
+
+};
+
+#define VMPrint(format, ...)        VMFilePrint ( 1,  format, ##__VA_ARGS__)
+#define VMPrintError(format, ...)   VMFilePrint ( 2,  format, ##__VA_ARGS__)
