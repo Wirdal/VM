@@ -8,7 +8,7 @@
  
     
 ## What we think we know
- -We are supposed to create 2 threads, Idle and Main, main runs the specified program.  The main thread can create new threads.  When each thread is created (or maybe on each tick), the machine should check what thread should be running in a scheduler function.  This scheduler function should decide which thread to run based on the priority stored in the TCB.  If the scheduler finds a thread with a higher priority, or the current thread finishes, the schduler will switch contexts using MCS(oldthread, newthread).  The context holds thread information such as the function that the thread should be running and is stored in the TCB and saved with SMC.  The context is created with MCC, but we don't know exactly what MCC does (vanessa said we don't really need to know, it magically creates the context for the machine?).-
+- We are supposed to create 2 threads, Idle and Main, main runs the specified program.  The main thread can create new threads.  When each thread is created (or maybe on each tick), the machine should check what thread should be running in a scheduler function.  This scheduler function should decide which thread to run based on the priority stored in the TCB.  If the scheduler finds a thread with a higher priority, or the current thread finishes, the schduler will switch contexts using MCS(oldthread, newthread).  The context holds thread information such as the function that the thread should be running and is stored in the TCB and saved with SMC.  The context is created with MCC, but we don't know exactly what MCC does (vanessa said we don't really need to know, it magically creates the context for the machine?).-
  
  ## What we don't know
  1. How to perform the threads 'function' on each tick
