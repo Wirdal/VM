@@ -63,7 +63,7 @@ TVMStatus VMFileRead(int filedescriptor, void *data, int *length){
 
 };
 TVMStatus VMFileWrite(int filedescriptor, void *data, int *length){
-
+    MachineFileWrite(filedescriptor, data, *length, EmptyCallback, NULL);
 };
 TVMStatus VMFileSeek(int filedescriptor, int offset, int whence, int *newoffset){
 
@@ -92,6 +92,7 @@ void MachineCallback(void *calldata, int result){
  *         Data Structs      *
  * **************************/
 
+// Thread Control Block
 struct TCB{
     // Needed for thread create
     TVMThreadEntry DEntry;
@@ -105,14 +106,24 @@ struct TCB{
     int DFd;
     TVMThreadState DSTate;
     // Constructor
-    TCB();
+    TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid);
 }
 
-TCB::TCB(){
-    
+TCB::TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
+    DEntry = entry;
+    DParam = param;
+    DMemsize = memsize;
+
 };
 
+struct TCBList{
+    std::vector<TCB*> DTList;
+}
 
 /*****************************
  *         Callback Fns      *
  * **************************/
+
+void EmptyCallback(void *calldata, int result){
+    
+}
