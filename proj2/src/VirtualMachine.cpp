@@ -77,7 +77,7 @@ TVMStatus VMFilePrint(int filedescriptor, const char *format, ...){
 
 /*****************************
  * Our definitions are here  *
- *      Functions first      *
+ *        Functions          *
  * **************************/
 int globaltick = 0;
 void AlarmCallback(void *calldata){
@@ -87,6 +87,10 @@ void MachineCallback(void *calldata, int result){
 
 };
               
+
+/*****************************
+ *         Data Structs      *
+ * **************************/
 
 struct TCB{
     // Needed for thread create
@@ -100,10 +104,15 @@ struct TCB{
     int DTicks;
     int DFd;
     TVMThreadState DSTate;
-
-TCB();
+    // Constructor
+    TCB();
 }
 
 TCB::TCB(){
     
 };
+
+
+/*****************************
+ *         Callback Fns      *
+ * **************************/
