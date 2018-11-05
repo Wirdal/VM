@@ -6,6 +6,67 @@
 #include <algorithm>
 
 /*****************************
+ * Our definitions are here  *
+ *     Callback Functions    *
+ * **************************/
+int globaltick = 0;
+void AlarmCallback(void *calldata){
+    //Call the scheduler here
+};
+void MachineCallback(void *calldata, int result){
+
+};
+              
+
+/*****************************
+ *         Data Structs      *
+ * **************************/
+
+// Thread Control Block
+
+struct TCB{
+    // Needed for thread create
+    TVMThreadEntry DEntry;
+    void * DParam;
+    TVMMemorySize DMemsize;
+    TVMThreadPriority DPrio;
+    TVMThreadID DTID;
+    static TVMThreadID DTIDCounter;
+    uint8_t DStack;
+
+    // What will get set later/ don't care about at the time
+    int DTicks;
+    int DFd;
+    TVMThreadState DSTate;
+
+
+    // Constructor
+    TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid);
+    int IncrementID();
+};
+
+TCB::TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
+    DEntry = entry;
+    DParam = param;
+    DMemsize = memsize;
+    DPrio = prio;
+    DTID = IncrementID();
+    tid = &DTID;
+    DTicks = 0;
+    DFd = 0;
+    DSTate = VM_THREAD_STATE_DEAD;
+
+};
+
+int TCB::IncrementID(){
+    ++DTIDCounter;
+};
+
+struct TCBList{
+    std::vector<TCB*> DTList;
+};
+
+/*****************************
  * The required code is here *
  * **************************/
 
@@ -20,7 +81,7 @@ extern "C" {
 TVMStatus VMStart(int tickms, int argc, char *argv[]){
     MachineInitialize();
     MachineEnableSignals();
-    MachineRequestAlarm(1000* tickms, AlarmCallback, NULL);
+    MachineRequestAlarm(1000 * tickms, AlarmCallback, NULL);
 
 };
 
@@ -63,7 +124,7 @@ TVMStatus VMFileRead(int filedescriptor, void *data, int *length){
 
 };
 TVMStatus VMFileWrite(int filedescriptor, void *data, int *length){
-    MachineFileWrite(filedescriptor, data, *length, EmptyCallback, NULL);
+    MachineFileWrite(filedescriptor, data, *length, MachineCallback, NULL);
 };
 TVMStatus VMFileSeek(int filedescriptor, int offset, int whence, int *newoffset){
 
@@ -75,59 +136,3 @@ TVMStatus VMFilePrint(int filedescriptor, const char *format, ...){
 #define VMPrint(format, ...)        VMFilePrint ( 1,  format, ##__VA_ARGS__)
 #define VMPrintError(format, ...)   VMFilePrint ( 2,  format, ##__VA_ARGS__)
 
-/*****************************
- * Our definitions are here  *
- *        Functions          *
- * **************************/
-int globaltick = 0;
-void AlarmCallback(void *calldata){
-    //Call the scheduler here
-};
-void MachineCallback(void *calldata, int result){
-
-};
-              
-
-/*****************************
- *         Data Structs      *
- * **************************/
-
-// Thread Control Block
-struct TCB{
-    // Needed for thread create
-    TVMThreadEntry DEntry;
-    void * DParam;
-    TVMMemorySize DMemsize;
-    TVMThreadPriority DPrio;
-    TVMThreadIDRef DTID;
-
-    // What will get set later/ don't care about at the time
-    int DTicks;
-    int DFd;
-    TVMThreadState DSTate;
-    // Constructor
-    TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid);
-};
-
-TCB::TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
-    DEntry = entry;
-    DParam = param;
-    DMemsize = memsize;
-
-};
-
-struct TCBList{
-    std::vector<TCB*> DTList;
-};
-
-/*****************************
- *         Callback Fns      *
- * **************************/
-
-void EmptyCallback(void *calldata, int result){
-
-}
-
-void AlarmCallback(void *calldata){
-
-};
