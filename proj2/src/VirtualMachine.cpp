@@ -107,7 +107,7 @@ struct TCB{
     TVMThreadState DSTate;
     // Constructor
     TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid);
-}
+};
 
 TCB::TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
     DEntry = entry;
@@ -118,12 +118,16 @@ TCB::TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPrio
 
 struct TCBList{
     std::vector<TCB*> DTList;
-}
+};
 
 /*****************************
  *         Callback Fns      *
  * **************************/
 
 void EmptyCallback(void *calldata, int result){
-    
+
 }
+
+void AlarmCallback(void *calldata){
+
+};
