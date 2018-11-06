@@ -4,6 +4,7 @@
 #include <vector>
 #include <array>
 #include <algorithm>
+#include <queue>
 
 /*****************************
  * Our definitions are here  *
@@ -42,15 +43,18 @@ struct TCB{
 
     // Constructor
     TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid);
-    int IncrementID();
+    void IncrementID();
 };
+TVMThreadID TCB::DTIDCounter;
 
 TCB::TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
     DEntry = entry;
     DParam = param;
     DMemsize = memsize;
     DPrio = prio;
-    DTID = IncrementID();
+    IncrementID();
+    DTID = DTIDCounter;
+    DStack = *new uint8_t [memsize];
     tid = &DTID;
     DTicks = 0;
     DFd = 0;
@@ -58,13 +62,22 @@ TCB::TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPrio
 
 };
 
-int TCB::IncrementID(){
+void TCB::IncrementID(){
     ++DTIDCounter;
 };
 
 struct TCBList{
     std::vector<TCB*> DTList;
+    std::queue<TCB*> DHighPrio;
+    std::queue<TCB*> DMedPrio;
+    std::queue<TCB*> DLowPrio;
 };
+
+/*****************************
+ *Any global structs are here*
+ * **************************/
+
+TCBList GLOBAL_TCB_LIST = TCBList();
 
 /*****************************
  * The required code is here *
@@ -93,7 +106,8 @@ TVMStatus VMTickCount(TVMTickRef tickref){
 };
 
 TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
-    
+    TCB newTCB = TCB(entry, param, memsize, prio, tid);
+    // Add it to the list as well
 };
 TVMStatus VMThreadDelete(TVMThreadID thread){
 
@@ -129,10 +143,4 @@ TVMStatus VMFileWrite(int filedescriptor, void *data, int *length){
 TVMStatus VMFileSeek(int filedescriptor, int offset, int whence, int *newoffset){
 
 };
-TVMStatus VMFilePrint(int filedescriptor, const char *format, ...){
-
-};
-
-#define VMPrint(format, ...)        VMFilePrint ( 1,  format, ##__VA_ARGS__)
-#define VMPrintError(format, ...)   VMFilePrint ( 2,  format, ##__VA_ARGS__)
 
