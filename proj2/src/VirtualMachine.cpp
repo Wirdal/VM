@@ -138,7 +138,7 @@ TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsiz
     MachineSuspendSignals(&localsigs);
     TCB newTCB = TCB(entry, param, memsize, prio, tid);
     GLOBAL_TCB_LIST.DTList.push_back(&newTCB);
-    tid = &newTCB.DTID;
+    *tid = newTCB.DTID;
     MachineResumeSignals(&localsigs);
 };
 TVMStatus VMThreadDelete(TVMThreadID thread){
