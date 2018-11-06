@@ -45,6 +45,7 @@ struct TCB{
 
     // Constructor
     TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid);
+    ~TCB();
     void IncrementID();
 };
 TVMThreadID TCB::DTIDCounter;
@@ -61,10 +62,12 @@ TCB::TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPrio
     DTicks = 0;
     DFd = 0;
     DSTate = VM_THREAD_STATE_DEAD;
-    MachineContextCreate(&DContext, DEntry, DParam, &DStack, DMemsize);
+    // MachineContextCreate(&DContext, DEntry, DParam, &DStack, DMemsize);
 
 };
-
+TCB::~TCB(){
+    delete &DStack;
+};
 void TCB::IncrementID(){
     ++DTIDCounter;
 };
@@ -150,6 +153,7 @@ TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsiz
     *tid = newTCB.DTID;
     MachineResumeSignals(&localsigs);
 };
+
 TVMStatus VMThreadDelete(TVMThreadID thread){
 
 };
