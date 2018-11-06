@@ -17,14 +17,18 @@ void AlarmCallback(void *calldata){
 void MachineCallback(void *calldata, int result){
 
 };
+void IdleCallback(){
+    //Schedule
+};
               
 
 /*****************************
  *         Data Structs      *
  ****************************/
 
-// Thread Control Block
-
+    /*****************************
+    *      Thread Control Block  *
+    * **************************/
 struct TCB{
     // Needed for thread create
     TVMThreadEntry DEntry;
@@ -33,63 +37,86 @@ struct TCB{
     TVMThreadPriority DPrio;
     TVMThreadID DTID;
     static TVMThreadID DTIDCounter;
-    uint8_t DStack;
+    uint8_t * DStack;
 
     // What will get set later/ don't care about at the time
     int DTicks;
     int DFd;
-    TVMThreadState DSTate;
+    TVMThreadState DState;
+    SMachineContext DContext;
 
 
     // Constructor
-    TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid);
+    TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio);
+    // ~TCB();
     void IncrementID();
 };
 TVMThreadID TCB::DTIDCounter;
 
-TCB::TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
+TCB::TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio){
     DEntry = entry;
     DParam = param;
     DMemsize = memsize;
     DPrio = prio;
     IncrementID();
     DTID = DTIDCounter;
-    DStack = *new uint8_t [memsize];
-    tid = &DTID;
+    DStack = new uint8_t [memsize];
     DTicks = 0;
     DFd = 0;
-    DSTate = VM_THREAD_STATE_DEAD;
-
+    DState = VM_THREAD_STATE_DEAD;
+    
+    //MachineContextCreate(&DContext, DEntry, DParam, &DStack, DMemsize);
 };
-
+// TCB::~TCB(){
+//     delete &DStack;
+// };
 void TCB::IncrementID(){
     ++DTIDCounter;
 };
 
+    /*****************************
+    *      TCB LIST STRUCTURE    *
+    * **************************/
 struct TCBList{
+    // Current thread control block
+    TCB* DCurrentTCB;
+
     // Containers
     std::vector<TCB*> DTList;
     std::queue<TCB*> DHighPrio;
     std::queue<TCB*> DMedPrio;
     std::queue<TCB*> DLowPrio;
+    std::vector<TCB*> DSleepingList;
 
-    TCB* FindTCB(TVMThreadIDRef id);
+    //Functions
+    TCB* FindTCB(TVMThreadID id);
     void AddToReady(TCB*);
+    void Delete(TVMThreadID id);
+    
 };
-TCB* TCBList::FindTCB(TVMThreadIDRef id){
+
+TCB* TCBList::FindTCB(TVMThreadID id){
     //Looks for a TCB given a TID
-    for (const auto &iteratedlist: DTList){
-        if (iteratedlist->DTID == *id){
+    for (auto iteratedlist: DTList){
+        if (iteratedlist->DTID == id){
             return iteratedlist;
         }
     }
     return NULL;
 }
 void TCBList::AddToReady(TCB* tcb){
-    switch (tcb->DSTate){
+    switch (tcb->DState){
         case VM_THREAD_PRIORITY_LOW: DLowPrio.push(tcb);
         case VM_THREAD_PRIORITY_NORMAL: DMedPrio.push(tcb);
         default: DHighPrio.push(tcb);
+    }
+}
+void TCBList::Delete(TVMThreadID id){
+    int i = 0;
+    for (auto iteratedlist: DTList){
+        if (iteratedlist->DTID == id){
+            DTList.erase(i);
+        }
     }
 }
 /*****************************
@@ -117,10 +144,6 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 
 
     TVMMainEntry entry = VMLoadModule(argv[0]);
-    if (entry == NULL) {
-        VMPrint("Failed to load \n");
-        return VM_STATUS_FAILURE;
-    }
 
     entry(argc, argv);
     return VM_STATUS_SUCCESS;
@@ -136,36 +159,52 @@ TVMStatus VMTickCount(TVMTickRef tickref){
 TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
-    TCB newTCB = TCB(entry, param, memsize, prio, tid);
-    GLOBAL_TCB_LIST.DTList.push_back(&newTCB);
-    tid = &newTCB.DTID;
+    GLOBAL_TCB_LIST.DTList.emplace_back(new TCB(entry, param, memsize, prio)); //Add it on the heap
+    *tid = TCB::DTIDCounter;
     MachineResumeSignals(&localsigs);
 };
-TVMStatus VMThreadDelete(TVMThreadID thread){
 
+TVMStatus VMThreadDelete(TVMThreadID thread){
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
+    GLOBAL_TCB_LIST.Delete(thread);
+    MachineResumeSignals(&localsigs);
 };
+
 TVMStatus VMThreadActivate(TVMThreadID thread){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
-    TCB* FoundTCB = GLOBAL_TCB_LIST.FindTCB(&thread);
-    FoundTCB->DSTate=VM_THREAD_STATE_READY;
-    GLOBAL_TCB_LIST.AddToReady(FoundTCB);
+    TCB* foundtcb = GLOBAL_TCB_LIST.FindTCB(thread);
+    foundtcb->DState = VM_THREAD_STATE_READY; 
+    GLOBAL_TCB_LIST.AddToReady(foundtcb);
+    MachineContextCreate(&foundtcb->DContext, foundtcb->DEntry, foundtcb->DParam, foundtcb->DStack, foundtcb->DMemsize);
+    MachineResumeSignals(&localsigs);
 };
 TVMStatus VMThreadTerminate(TVMThreadID thread){
 
 };
+
 TVMStatus VMThreadID(TVMThreadIDRef threadref){
-
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
+    *threadref = GLOBAL_TCB_LIST.DCurrentTCB->DTID;
+    MachineResumeSignals(&localsigs);
 };
+
 TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
-
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
+    TCB* foundtcb = GLOBAL_TCB_LIST.FindTCB(thread);
+    *stateref = foundtcb->DState;
+    MachineResumeSignals(&localsigs);
 };
+
 TVMStatus VMThreadSleep(TVMTick tick){
 
 };
 
 TVMStatus VMFileOpen(const char *filename, int flags, int mode, int *filedescriptor){
-
+    
 };
 TVMStatus VMFileClose(int filedescriptor){
 
