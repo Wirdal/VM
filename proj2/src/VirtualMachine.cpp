@@ -160,7 +160,7 @@ TVMStatus VMThreadActivate(TVMThreadID thread){
     TCB* FoundTCB = GLOBAL_TCB_LIST.FindTCB(&thread);
     FoundTCB->DSTate=VM_THREAD_STATE_READY;
     GLOBAL_TCB_LIST.AddToReady(FoundTCB);
-    MachineResumeSignals(localsigs);
+    MachineResumeSignals(&localsigs);
 };
 TVMStatus VMThreadTerminate(TVMThreadID thread){
 
@@ -169,21 +169,21 @@ TVMStatus VMThreadID(TVMThreadIDRef threadref){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
     *threadref = GLOBAL_TCB_LIST.DCurrentTCB->DTID;
-    MachineResumeSignals(localsigs);
+    MachineResumeSignals(&localsigs);
 };
 TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
     TCB* foundtcb = GLOBAL_TCB_LIST.FindTCB(&thread);
     foundtcb->DSTate = *stateref;
-    MachineResumeSignals(localsigs);
+    MachineResumeSignals(&localsigs);
 };
 TVMStatus VMThreadSleep(TVMTick tick){
 
 };
 
 TVMStatus VMFileOpen(const char *filename, int flags, int mode, int *filedescriptor){
-
+    
 };
 TVMStatus VMFileClose(int filedescriptor){
 
