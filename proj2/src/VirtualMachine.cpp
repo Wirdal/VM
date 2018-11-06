@@ -21,7 +21,7 @@ void MachineCallback(void *calldata, int result){
 
 /*****************************
  *         Data Structs      *
- * **************************/
+ ****************************/
 
 // Thread Control Block
 
@@ -67,14 +67,33 @@ void TCB::IncrementID(){
 };
 
 struct TCBList{
+    // Containers
     std::vector<TCB*> DTList;
     std::queue<TCB*> DHighPrio;
     std::queue<TCB*> DMedPrio;
     std::queue<TCB*> DLowPrio;
-};
 
+    TCB* FindTCB(TVMThreadIDRef id);
+    void AddToReady(TCB*);
+};
+TCB* TCBList::FindTCB(TVMThreadIDRef id){
+    //Looks for a TCB given a TID
+    for (const auto &iteratedlist: DTList){
+        if (iteratedlist->DTID == *id){
+            return iteratedlist;
+        }
+    }
+    return NULL;
+}
+void TCBList::AddToReady(TCB* tcb){
+    switch (tcb->DSTate){
+        case VM_THREAD_PRIORITY_LOW: DLowPrio.push(tcb);
+        case VM_THREAD_PRIORITY_NORMAL: DMedPrio.push(tcb);
+        default: DHighPrio.push(tcb);
+    }
+}
 /*****************************
- *Any global structs are here*
+ *  Any global vars are here *
  * **************************/
 
 TCBList GLOBAL_TCB_LIST = TCBList();
@@ -96,6 +115,15 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     MachineEnableSignals();
     MachineRequestAlarm(1000 * tickms, AlarmCallback, NULL);
 
+
+    TVMMainEntry entry = VMLoadModule(argv[0]);
+    if (entry == NULL) {
+        VMPrint("Failed to load \n");
+        return VM_STATUS_FAILURE;
+    }
+
+    entry(argc, argv);
+    return VM_STATUS_SUCCESS;
 };
 
 TVMStatus VMTickMS(int *tickmsref){
@@ -106,14 +134,22 @@ TVMStatus VMTickCount(TVMTickRef tickref){
 };
 
 TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
     TCB newTCB = TCB(entry, param, memsize, prio, tid);
-    // Add it to the list as well
+    GLOBAL_TCB_LIST.DTList.push_back(&newTCB);
+    tid = &newTCB.DTID;
+    MachineResumeSignals(&localsigs);
 };
 TVMStatus VMThreadDelete(TVMThreadID thread){
 
 };
 TVMStatus VMThreadActivate(TVMThreadID thread){
-
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
+    TCB* FoundTCB = GLOBAL_TCB_LIST.FindTCB(&thread);
+    FoundTCB->DSTate=VM_THREAD_STATE_READY;
+    GLOBAL_TCB_LIST.AddToReady(FoundTCB);
 };
 TVMStatus VMThreadTerminate(TVMThreadID thread){
 
