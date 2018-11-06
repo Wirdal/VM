@@ -34,7 +34,7 @@ struct TCB{
     TVMThreadPriority DPrio;
     TVMThreadID DTID;
     static TVMThreadID DTIDCounter;
-    uint8_t DStack;
+    uint8_t * DStack;
 
     // What will get set later/ don't care about at the time
     int DTicks;
@@ -57,7 +57,7 @@ TCB::TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPrio
     DPrio = prio;
     IncrementID();
     DTID = DTIDCounter;
-    DStack = *new uint8_t [memsize];
+    DStack = new uint8_t [memsize];
     tid = &DTID;
     DTicks = 0;
     DFd = 0;
