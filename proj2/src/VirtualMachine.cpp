@@ -23,8 +23,9 @@ void MachineCallback(void *calldata, int result){
  *         Data Structs      *
  ****************************/
 
-// Thread Control Block
-
+    /*****************************
+    *      Thread Control Block  *
+    * **************************/
 struct TCB{
     // Needed for thread create
     TVMThreadEntry DEntry;
@@ -39,6 +40,7 @@ struct TCB{
     int DTicks;
     int DFd;
     TVMThreadState DSTate;
+    SMachineContext DContext;
 
 
     // Constructor
@@ -59,6 +61,7 @@ TCB::TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPrio
     DTicks = 0;
     DFd = 0;
     DSTate = VM_THREAD_STATE_DEAD;
+    MachineContextCreate(&DContext, DEntry, DParam, &DStack, DMemsize);
 
 };
 
@@ -66,7 +69,13 @@ void TCB::IncrementID(){
     ++DTIDCounter;
 };
 
+    /*****************************
+    *      TCB LIST STRUCTURE    *
+    * **************************/
 struct TCBList{
+    // Current thread control block
+    TCB* DCurrentTCB;
+
     // Containers
     std::vector<TCB*> DTList;
     std::queue<TCB*> DHighPrio;
@@ -144,21 +153,30 @@ TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsiz
 TVMStatus VMThreadDelete(TVMThreadID thread){
 
 };
+
 TVMStatus VMThreadActivate(TVMThreadID thread){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
     TCB* FoundTCB = GLOBAL_TCB_LIST.FindTCB(&thread);
     FoundTCB->DSTate=VM_THREAD_STATE_READY;
     GLOBAL_TCB_LIST.AddToReady(FoundTCB);
+    MachineResumeSignals(localsigs);
 };
 TVMStatus VMThreadTerminate(TVMThreadID thread){
 
 };
 TVMStatus VMThreadID(TVMThreadIDRef threadref){
-
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
+    *threadref = GLOBAL_TCB_LIST.DCurrentTCB->DTID;
+    MachineResumeSignals(localsigs);
 };
 TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
-
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
+    TCB* foundtcb = GLOBAL_TCB_LIST.FindTCB(&thread);
+    foundtcb->DSTate = *stateref;
+    MachineResumeSignals(localsigs);
 };
 TVMStatus VMThreadSleep(TVMTick tick){
 
