@@ -62,7 +62,8 @@ TCB::TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPrio
     DTicks = 0;
     DFd = 0;
     DState = VM_THREAD_STATE_DEAD;
-    // MachineContextCreate(&DContext, DEntry, DParam, &DStack, DMemsize);
+    // TODO Issue here | How to get this to work properly?
+    // MachineContextCreate(&DContext, DEntry, DParam, &DStack, DMemsize); 
 
 };
 // TCB::~TCB(){
@@ -88,6 +89,7 @@ struct TCBList{
     TCB* FindTCB(TVMThreadIDRef id);
     void AddToReady(TCB*);
 };
+
 TCB* TCBList::FindTCB(TVMThreadIDRef id){
     //Looks for a TCB given a TID
     for (const auto &iteratedlist: DTList){
@@ -162,7 +164,8 @@ TVMStatus VMThreadActivate(TVMThreadID thread){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
     TCB* FoundTCB = GLOBAL_TCB_LIST.FindTCB(&thread);
-    FoundTCB->DState=VM_THREAD_STATE_READY;
+    // TODO get help | Why am I failing when trying to reference?
+    FoundTCB->DState = VM_THREAD_STATE_READY; //This is the issue
     GLOBAL_TCB_LIST.AddToReady(FoundTCB);
     MachineResumeSignals(&localsigs);
 };
@@ -179,7 +182,6 @@ TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
     TCB* foundtcb = GLOBAL_TCB_LIST.FindTCB(&thread);
-    // foundtcb->DSTate = *stateref;
     stateref = &foundtcb->DState;
     MachineResumeSignals(&localsigs);
 };
