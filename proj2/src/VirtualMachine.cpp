@@ -45,7 +45,7 @@ struct TCB{
 
     // Constructor
     TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid);
-    ~TCB();
+    // ~TCB();
     void IncrementID();
 };
 TVMThreadID TCB::DTIDCounter;
@@ -65,9 +65,9 @@ TCB::TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPrio
     // MachineContextCreate(&DContext, DEntry, DParam, &DStack, DMemsize);
 
 };
-TCB::~TCB(){
-    delete &DStack;
-};
+// TCB::~TCB(){
+//     delete &DStack;
+// };
 void TCB::IncrementID(){
     ++DTIDCounter;
 };
