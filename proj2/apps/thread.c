@@ -14,12 +14,8 @@ void VMThread(void *param){
 void VMMain(int argc, char *argv[]){
     TVMThreadID VMThreadID;
     TVMThreadState VMState;
-    printf("*VMThreadID start: %d", VMThreadID);
-    printf("\n");
     VMPrint("*VMMain creating thread.\n");
     VMThreadCreate(VMThread, NULL, 0x100000, VM_THREAD_PRIORITY_NORMAL, &VMThreadID);
-    printf("*VMThreadID after: %d", VMThreadID);
-    printf("\n");
     VMPrint("*VMMain getting thread state: ");
     VMThreadState(VMThreadID, &VMState);
     switch(VMState){
@@ -35,6 +31,18 @@ void VMMain(int argc, char *argv[]){
     }
     VMPrint("*VMMain activating thread.\n");
     VMThreadActivate(VMThreadID);
+    VMThreadState(VMThreadID, &VMState);
+    switch(VMState){
+        case VM_THREAD_STATE_DEAD:       VMPrint("*DEAD\n");
+                                        break;
+        case VM_THREAD_STATE_RUNNING:    VMPrint("*RUNNING\n");
+                                        break;
+        case VM_THREAD_STATE_READY:      VMPrint("*READY\n");
+                                        break;
+        case VM_THREAD_STATE_WAITING:    VMPrint("*WAITING\n");
+                                        break;
+        default:                        break;
+    }
     VMPrint("*VMMain going to sleep 50\n");
     VMThreadSleep(50);
     VMPrint("*VMMain Awake\n*Goodbye\n");

@@ -17,6 +17,9 @@ void AlarmCallback(void *calldata){
 void MachineCallback(void *calldata, int result){
 
 };
+void IdleCallback(){
+    //Schedule
+};
               
 
 /*****************************
@@ -61,9 +64,8 @@ TCB::TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPrio
     DTicks = 0;
     DFd = 0;
     DState = VM_THREAD_STATE_DEAD;
-    // TODO Issue here | How to get this to work properly?
-    // MachineContextCreate(&DContext, DEntry, DParam, &DStack, DMemsize); 
-
+    
+    //MachineContextCreate(&DContext, DEntry, DParam, &DStack, DMemsize);
 };
 // TCB::~TCB(){
 //     delete &DStack;
@@ -145,9 +147,8 @@ TVMStatus VMTickCount(TVMTickRef tickref){
 TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
-    TCB *newTCB = new TCB(entry, param, memsize, prio); //Add it on the heap
-    GLOBAL_TCB_LIST.DTList.push_back(newTCB);
-    *tid = newTCB->DTID;
+    GLOBAL_TCB_LIST.DTList.emplace_back(new TCB(entry, param, memsize, prio)); //Add it on the heap
+    *tid = TCB::DTIDCounter;
     MachineResumeSignals(&localsigs);
 };
 
@@ -159,9 +160,9 @@ TVMStatus VMThreadActivate(TVMThreadID thread){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
     TCB* FoundTCB = GLOBAL_TCB_LIST.FindTCB(thread);
-    // TODO get help | Why am I failing when trying to reference?
-    FoundTCB->DState = VM_THREAD_STATE_READY; //This is the issue?
+    FoundTCB->DState = VM_THREAD_STATE_READY; 
     GLOBAL_TCB_LIST.AddToReady(FoundTCB);
+    MachineContextCreate(&FoundTCB->DContext, FoundTCB->DEntry, FoundTCB->DParam, FoundTCB->DStack, FoundTCB->DMemsize);
     MachineResumeSignals(&localsigs);
 };
 TVMStatus VMThreadTerminate(TVMThreadID thread){
@@ -179,10 +180,7 @@ TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
     TCB* foundtcb = GLOBAL_TCB_LIST.FindTCB(thread);
-    if (foundtcb == NULL){
-        VMPrint("REEEE state \n");
-    }
-    stateref = &foundtcb->DState;
+    *stateref = foundtcb->DState;
     MachineResumeSignals(&localsigs);
 };
 
