@@ -44,13 +44,13 @@ struct TCB{
 
 
     // Constructor
-    TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid);
+    TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio);
     // ~TCB();
     void IncrementID();
 };
 TVMThreadID TCB::DTIDCounter;
 
-TCB::TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
+TCB::TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio){
     DEntry = entry;
     DParam = param;
     DMemsize = memsize;
@@ -58,7 +58,6 @@ TCB::TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPrio
     IncrementID();
     DTID = DTIDCounter;
     DStack = new uint8_t [memsize];
-    tid = &DTID;
     DTicks = 0;
     DFd = 0;
     DState = VM_THREAD_STATE_DEAD;
@@ -86,14 +85,14 @@ struct TCBList{
     std::queue<TCB*> DMedPrio;
     std::queue<TCB*> DLowPrio;
 
-    TCB* FindTCB(TVMThreadIDRef id);
+    TCB* FindTCB(TVMThreadID id);
     void AddToReady(TCB*);
 };
 
-TCB* TCBList::FindTCB(TVMThreadIDRef id){
+TCB* TCBList::FindTCB(TVMThreadID id){
     //Looks for a TCB given a TID
-    for (const auto &iteratedlist: DTList){
-        if (iteratedlist->DTID == *id){
+    for (auto iteratedlist: DTList){
+        if (iteratedlist->DTID == id){
             return iteratedlist;
         }
     }
@@ -131,10 +130,6 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 
 
     TVMMainEntry entry = VMLoadModule(argv[0]);
-    if (entry == NULL) {
-        VMPrint("Failed to load \n");
-        return VM_STATUS_FAILURE;
-    }
 
     entry(argc, argv);
     return VM_STATUS_SUCCESS;
@@ -150,9 +145,9 @@ TVMStatus VMTickCount(TVMTickRef tickref){
 TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
-    TCB newTCB = TCB(entry, param, memsize, prio, tid);
-    GLOBAL_TCB_LIST.DTList.push_back(&newTCB);
-    *tid = newTCB.DTID;
+    TCB *newTCB = new TCB(entry, param, memsize, prio); //Add it on the heap
+    GLOBAL_TCB_LIST.DTList.push_back(newTCB);
+    *tid = newTCB->DTID;
     MachineResumeSignals(&localsigs);
 };
 
@@ -163,28 +158,34 @@ TVMStatus VMThreadDelete(TVMThreadID thread){
 TVMStatus VMThreadActivate(TVMThreadID thread){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
-    TCB* FoundTCB = GLOBAL_TCB_LIST.FindTCB(&thread);
+    TCB* FoundTCB = GLOBAL_TCB_LIST.FindTCB(thread);
     // TODO get help | Why am I failing when trying to reference?
-    FoundTCB->DState = VM_THREAD_STATE_READY; //This is the issue
+    FoundTCB->DState = VM_THREAD_STATE_READY; //This is the issue?
     GLOBAL_TCB_LIST.AddToReady(FoundTCB);
     MachineResumeSignals(&localsigs);
 };
 TVMStatus VMThreadTerminate(TVMThreadID thread){
 
 };
+
 TVMStatus VMThreadID(TVMThreadIDRef threadref){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
     *threadref = GLOBAL_TCB_LIST.DCurrentTCB->DTID;
     MachineResumeSignals(&localsigs);
 };
+
 TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
-    TCB* foundtcb = GLOBAL_TCB_LIST.FindTCB(&thread);
+    TCB* foundtcb = GLOBAL_TCB_LIST.FindTCB(thread);
+    if (foundtcb == NULL){
+        VMPrint("REEEE state \n");
+    }
     stateref = &foundtcb->DState;
     MachineResumeSignals(&localsigs);
 };
+
 TVMStatus VMThreadSleep(TVMTick tick){
 
 };
