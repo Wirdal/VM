@@ -39,7 +39,7 @@ struct TCB{
     // What will get set later/ don't care about at the time
     int DTicks;
     int DFd;
-    TVMThreadState DSTate;
+    TVMThreadState DState;
     SMachineContext DContext;
 
 
@@ -61,7 +61,7 @@ TCB::TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPrio
     tid = &DTID;
     DTicks = 0;
     DFd = 0;
-    DSTate = VM_THREAD_STATE_DEAD;
+    DState = VM_THREAD_STATE_DEAD;
     // MachineContextCreate(&DContext, DEntry, DParam, &DStack, DMemsize);
 
 };
@@ -98,7 +98,7 @@ TCB* TCBList::FindTCB(TVMThreadIDRef id){
     return NULL;
 }
 void TCBList::AddToReady(TCB* tcb){
-    switch (tcb->DSTate){
+    switch (tcb->DState){
         case VM_THREAD_PRIORITY_LOW: DLowPrio.push(tcb);
         case VM_THREAD_PRIORITY_NORMAL: DMedPrio.push(tcb);
         default: DHighPrio.push(tcb);
@@ -162,7 +162,7 @@ TVMStatus VMThreadActivate(TVMThreadID thread){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
     TCB* FoundTCB = GLOBAL_TCB_LIST.FindTCB(&thread);
-    FoundTCB->DSTate=VM_THREAD_STATE_READY;
+    FoundTCB->DState=VM_THREAD_STATE_READY;
     GLOBAL_TCB_LIST.AddToReady(FoundTCB);
     MachineResumeSignals(&localsigs);
 };
@@ -179,7 +179,8 @@ TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
     TCB* foundtcb = GLOBAL_TCB_LIST.FindTCB(&thread);
-    foundtcb->DSTate = *stateref;
+    // foundtcb->DSTate = *stateref;
+    *stateref = foundtcb->DState;
     MachineResumeSignals(&localsigs);
 };
 TVMStatus VMThreadSleep(TVMTick tick){
