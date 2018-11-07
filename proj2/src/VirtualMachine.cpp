@@ -180,7 +180,7 @@ TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
     MachineSuspendSignals(&localsigs);
     TCB* foundtcb = GLOBAL_TCB_LIST.FindTCB(&thread);
     // foundtcb->DSTate = *stateref;
-    *stateref = foundtcb->DState;
+    stateref = &foundtcb->DState;
     MachineResumeSignals(&localsigs);
 };
 TVMStatus VMThreadSleep(TVMTick tick){
