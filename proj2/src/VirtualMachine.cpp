@@ -65,7 +65,6 @@ TCB::TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPrio
     DFd = 0;
     DState = VM_THREAD_STATE_DEAD;
     
-    //MachineContextCreate(&DContext, DEntry, DParam, &DStack, DMemsize);
 };
 // TCB::~TCB(){
 //     delete &DStack;
@@ -201,7 +200,13 @@ TVMStatus VMThreadActivate(TVMThreadID thread){
     MachineResumeSignals(&localsigs);
 };
 TVMStatus VMThreadTerminate(TVMThreadID thread){
-
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
+    TCB* foundtcb = GLOBAL_TCB_LIST.FindTCB(thread);
+    foundtcb->DState=VM_THREAD_STATE_DEAD;
+    // Remove from ready
+    // Call schedular
+    MachineResumeSignals(&localsigs);
 };
 
 TVMStatus VMThreadID(TVMThreadIDRef threadref){
