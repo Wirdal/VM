@@ -83,6 +83,7 @@ struct TCBList{
 
     // Containers
     std::vector<TCB*> DTList;
+    // Ready lists
     std::queue<TCB*> DHighPrio;
     std::queue<TCB*> DMedPrio;
     std::queue<TCB*> DLowPrio;
@@ -92,6 +93,10 @@ struct TCBList{
     TCB* FindTCB(TVMThreadID id);
     void AddToReady(TCB*);
     void Delete(TVMThreadID id);
+    void Sleep(TVMTick tick);
+
+    //Scheduler
+    void Schedule();
     
 };
 
@@ -103,22 +108,36 @@ TCB* TCBList::FindTCB(TVMThreadID id){
         }
     }
     return NULL;
-}
+};
 void TCBList::AddToReady(TCB* tcb){
     switch (tcb->DState){
         case VM_THREAD_PRIORITY_LOW: DLowPrio.push(tcb);
         case VM_THREAD_PRIORITY_NORMAL: DMedPrio.push(tcb);
         default: DHighPrio.push(tcb);
     }
-}
+};
 void TCBList::Delete(TVMThreadID id){
+    // Might need to handle if it is the current tcb.
     int i = 0;
     for (auto iteratedlist: DTList){
         if (iteratedlist->DTID == id){
-            DTList.erase(i);
+            DTList.erase(DTList.begin()+i);
         }
     }
-}
+};
+void TCBList::Sleep(TVMTick tick){
+    if (DCurrentTCB == NULL){
+        return;
+    }
+    DCurrentTCB->DTicks=tick;
+    DSleepingList.push_back(DCurrentTCB);
+    DCurrentTCB = NULL;
+};
+
+void TCBList::Schedule(){
+    //Look into the priorities, and switch context based on the results.
+    //Also set the current TCB properly
+};
 /*****************************
  *  Any global vars are here *
  * **************************/
@@ -178,6 +197,7 @@ TVMStatus VMThreadActivate(TVMThreadID thread){
     foundtcb->DState = VM_THREAD_STATE_READY; 
     GLOBAL_TCB_LIST.AddToReady(foundtcb);
     MachineContextCreate(&foundtcb->DContext, foundtcb->DEntry, foundtcb->DParam, foundtcb->DStack, foundtcb->DMemsize);
+    GLOBAL_TCB_LIST.DCurrentTCB = foundtcb;
     MachineResumeSignals(&localsigs);
 };
 TVMStatus VMThreadTerminate(TVMThreadID thread){
@@ -200,6 +220,10 @@ TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
 };
 
 TVMStatus VMThreadSleep(TVMTick tick){
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
+    GLOBAL_TCB_LIST.Sleep(tick);
+    MachineResumeSignals(&localsigs);
 
 };
 

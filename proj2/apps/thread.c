@@ -32,17 +32,6 @@ void VMMain(int argc, char *argv[]){
     VMPrint("*VMMain activating thread.\n");
     VMThreadActivate(VMThreadID);
     VMThreadState(VMThreadID, &VMState);
-    switch(VMState){
-        case VM_THREAD_STATE_DEAD:       VMPrint("*DEAD\n");
-                                        break;
-        case VM_THREAD_STATE_RUNNING:    VMPrint("*RUNNING\n");
-                                        break;
-        case VM_THREAD_STATE_READY:      VMPrint("*READY\n");
-                                        break;
-        case VM_THREAD_STATE_WAITING:    VMPrint("*WAITING\n");
-                                        break;
-        default:                        break;
-    }
     VMPrint("*VMMain going to sleep 50\n");
     VMThreadSleep(50);
     VMPrint("*VMMain Awake\n*Goodbye\n");
