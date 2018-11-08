@@ -121,25 +121,19 @@ TVMThreadID idleID = 2;
 void Scheduler();
 void AlarmCallback(void *calldata){
     //check for threads sleeping
-    std::cout<<"**Called AlarmCallback()"<<"\n";
-    VMPrint("**Alarm\n");
     
     if(!SleepList.empty()){
-        VMPrint("****Sleeplist not empty\n");
-        std::cout<<"**CurrentTCB->DTicks: "<<CurrentTCB->DTicks<<"\n";
         //Decrement the ticks until it reaches 0
         if(CurrentTCB->DTicks > 0){
             CurrentTCB->DTicks = CurrentTCB->DTicks - 1;
         }
         //Done sleeping
         else{
-            std::cout<<"**CurrentTCB->DTicks: "<<CurrentTCB->DTicks<<"\n";
-            VMPrint("****Sleeplist empty, done sleeping\n");
             CurrentTCB->DState = VM_THREAD_STATE_READY;
             
             //put in correct place
             //delete from sleeping list
-            SleepList.pop_back();//http://www.cplusplus.com/reference/vector/vector/erase/
+            SleepList.pop_back(); //http://www.cplusplus.com/reference/vector/vector/erase/
         }
         
         
@@ -151,7 +145,6 @@ void AlarmCallback(void *calldata){
 
     globaltick++;
     tickms++;
-    VMPrint("**Alarm finished\n");
     Scheduler();
     
     
@@ -159,17 +152,16 @@ void AlarmCallback(void *calldata){
     //Call the scheduler here
 };
 void EmptyCallback(void *calldata){
-    VMPrint("**empty\n");
+    //VMPrint("**empty\n");
 };
 void MachineCallback(void *calldata, int result){
-    VMPrint("**machine\n");
+    //VMPrint("**machine\n");
     //Scheduler();
 };
 void IdleCallback(void *calldata){
     MachineEnableSignals(); //enabling signals allows the callbacks to be called
     while(1){
-        std::cout<<"hanging"<<"\n";
-        VMPrint("Idle\n");
+        //VMPrint("Idle\n");
     }
     //Schedule
 };
@@ -215,28 +207,19 @@ void Scheduler(){
     
     //found a waiting thread
     if(CurrentTCB->DState == VM_THREAD_STATE_WAITING){
-        std::cout<<"Found a waiting thread"<< " | New TCB ID: " << CurrentTCB->DTID<< "\n";
-        VMPrint("/waiting\n");
         NewTCB = CurrentTCB; //New thread front of normal list
-        //NewTCB->DEntry = AlarmCallback;
-        //NewTCB->DState = VM_THREAD_STATE_RUNNING;
-        //AlarmCallback(NULL);
-        //delete off normal list
-    }
+        
+    //Found a thread to execute
     if(CurrentTCB->DPrio == VM_THREAD_PRIORITY_NORMAL){
-        std::cout<<"normal shedule"<< " | New TCB ID: " << CurrentTCB->DTID<< "\n";
-        VMPrint("/TICK DONE\n");
         NewTCB = CurrentTCB; //New thread front of normal list
         NewTCB->DState = VM_THREAD_STATE_RUNNING;
         //delete off normal list
     }
 
     else{
-        std::cout<<"else shedule"<<"\n";
-        VMPrint("/else\n");
         NewTCB->DTID = idleID; //set the new TCB to be idle
     }
-    VMPrint("/Switch\n");
+
     MachineContextSwitch(&(CurrentTCB->DContext), &(NewTCB->DContext));  //Switch from current to new;
 }
 void skeleton(void *param){
