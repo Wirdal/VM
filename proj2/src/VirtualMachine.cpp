@@ -135,6 +135,7 @@ void TCBList::Sleep(TVMTick tick){
 void TCBList::Schedule(){
     //Look into the priorities, and switch context based on the results.
     //Also set the current TCB properly
+    //Do I need to pop though?
     TCB* foundtcb;
     if (DHighPrio.front() != NULL){
         foundtcb = FindTCB(DHighPrio.front()->DTID);
@@ -150,9 +151,11 @@ void TCBList::Schedule(){
     }
     else {
         //get the idle thread
+        ;
     }
+    MachineContextSwitch(&(DCurrentTCB->DContext),&(foundtcb->DContext));
+
 };
-}
 void TCBList::DecrementSleep(){
     for (auto iteratedlist: DSleepingList){
         if (iteratedlist->DTicks == 1){
@@ -171,9 +174,7 @@ void TCBList::DecrementSleep(){
 
 TCBList GLOBAL_TCB_LIST = TCBList();
 int GLOBAL_TICK = 0;
-int mainID = TCB::IncrementID();
-VMThreadCreate(AlarmCallback, NULL, 0x100000, VM_THREAD_PRIORITY_NORMAL); //mainID -> 0
-
+TVMThreadID MAIN_ID;
 /*****************************
  * The required code is here *
  * **************************/
@@ -189,8 +190,8 @@ extern "C" {
 TVMStatus VMStart(int tickms, int argc, char *argv[]){
     MachineInitialize();
     MachineRequestAlarm(1000 * tickms, AlarmCallback, NULL);
-
-
+    VMThreadCreate(AlarmCallback, NULL, 0x100000, VM_THREAD_PRIORITY_NORMAL, &MAIN_ID); //MAIN_ID -> 0
+    GLOBAL_TCB_LIST.DCurrentTCB = GLOBAL_TCB_LIST.FindTCB(MAIN_ID);
     TVMMainEntry entry = VMLoadModule(argv[0]);
     MachineEnableSignals();
     entry(argc, argv);
@@ -198,10 +199,16 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
 };
 
 TVMStatus VMTickMS(int *tickmsref){
-
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
+    // tickmsref = sometick
+    MachineResumeSignals(&localsigs);
 };
 TVMStatus VMTickCount(TVMTickRef tickref){
-
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
+    *tickref = GLOBAL_TICK;
+    MachineResumeSignals(&localsigs);
 };
 
 TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
@@ -223,11 +230,27 @@ TVMStatus VMThreadActivate(TVMThreadID thread){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
     TCB* foundtcb = GLOBAL_TCB_LIST.FindTCB(thread);
+    
+    if (foundtcb == NULL){
+        return VM_STATUS_ERROR_INVALID_ID;
+    }
+    if (foundtcb ->DState != VM_THREAD_STATE_DEAD) {
+        return VM_STATUS_ERROR_INVALID_STATE;
+    }
+
+    MachineContextCreate(&foundtcb->DContext, foundtcb->DEntry, foundtcb->DParam, foundtcb->DStack, foundtcb->DMemsize);
+    
+    // Check if the thread needs to yield
+    if (foundtcb->DState > GLOBAL_TCB_LIST.DCurrentTCB->DState) {
+        // Special scheduuling?
+        // foundtcb->DEntry(foundtcb->DParam);
+        GLOBAL_TCB_LIST.DCurrentTCB = foundtcb;
+    }
+
     foundtcb->DState = VM_THREAD_STATE_READY; 
     GLOBAL_TCB_LIST.AddToReady(foundtcb);
-    MachineContextCreate(&foundtcb->DContext, foundtcb->DEntry, foundtcb->DParam, foundtcb->DStack, foundtcb->DMemsize);
-    GLOBAL_TCB_LIST.DCurrentTCB = foundtcb;
     MachineResumeSignals(&localsigs);
+    return VM_STATUS_SUCCESS;
 };
 TVMStatus VMThreadTerminate(TVMThreadID thread){
     TMachineSignalState localsigs;
