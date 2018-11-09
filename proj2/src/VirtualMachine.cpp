@@ -171,6 +171,9 @@ void TCBList::DecrementSleep(){
 
 TCBList GLOBAL_TCB_LIST = TCBList();
 int GLOBAL_TICK = 0;
+int mainID = TCB::IncrementID();
+VMThreadCreate(AlarmCallback, NULL, 0x100000, VM_THREAD_PRIORITY_NORMAL); //mainID -> 0
+
 /*****************************
  * The required code is here *
  * **************************/
@@ -185,12 +188,11 @@ extern "C" {
 
 TVMStatus VMStart(int tickms, int argc, char *argv[]){
     MachineInitialize();
-    MachineEnableSignals();
     MachineRequestAlarm(1000 * tickms, AlarmCallback, NULL);
 
 
     TVMMainEntry entry = VMLoadModule(argv[0]);
-
+    MachineEnableSignals();
     entry(argc, argv);
     return VM_STATUS_SUCCESS;
 };
