@@ -92,10 +92,10 @@ struct TCBList{
     void AddToReady(TCB*);
     void Delete(TVMThreadID id);
     void Sleep(TVMTick tick);
+    void DecrementSleep();
 
     //Scheduler
     void Schedule();
-    
 };
 
 TCB* TCBList::FindTCB(TVMThreadID id){
@@ -152,6 +152,19 @@ void TCBList::Schedule(){
         //get the idle thread
     }
 };
+}
+void TCBList::DecrementSleep(){
+    for (auto iteratedlist: DSleepingList){
+        if (iteratedlist->DTicks == 1){
+            iteratedlist->DTicks = 0;
+            //remove it from the sleeping list
+            
+        }
+        else {
+            iteratedlist->DTicks --;
+        }
+    }
+}
 /*****************************
  *  Any global vars are here *
  * **************************/
