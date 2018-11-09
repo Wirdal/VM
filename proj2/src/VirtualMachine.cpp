@@ -10,7 +10,6 @@
  * Our definitions are here  *
  *     Callback Functions    *
  * **************************/
-int globaltick = 0;
 void AlarmCallback(void *calldata){
     //Call the scheduler here
 };
@@ -136,13 +135,29 @@ void TCBList::Sleep(TVMTick tick){
 void TCBList::Schedule(){
     //Look into the priorities, and switch context based on the results.
     //Also set the current TCB properly
+    TCB* foundtcb;
+    if (DHighPrio.front() != NULL){
+        foundtcb = FindTCB(DHighPrio.front()->DTID);
+        DHighPrio.pop();
+    }
+    else if (DMedPrio.front() != NULL){
+        foundtcb = FindTCB(DMedPrio.front()->DTID);
+        DMedPrio.pop();
+    }
+    else if (DLowPrio.front() != NULL){
+        foundtcb = FindTCB(DLowPrio.front()->DTID);
+        DLowPrio.pop();
+    }
+    else {
+        //get the idle thread
+    }
 };
 /*****************************
  *  Any global vars are here *
  * **************************/
 
 TCBList GLOBAL_TCB_LIST = TCBList();
-
+int GLOBAL_TICK = 0;
 /*****************************
  * The required code is here *
  * **************************/
