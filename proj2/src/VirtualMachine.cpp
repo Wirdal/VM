@@ -5,22 +5,6 @@
 #include <array>
 #include <algorithm>
 #include <queue>
-
-/*****************************
- * Our definitions are here  *
- *     Callback Functions    *
- * **************************/
-void AlarmCallback(void *calldata){
-    //Call the scheduler here
-};
-void MachineCallback(void *calldata, int result){
-
-};
-void IdleCallback(){
-    //Schedule
-};
-              
-
 /*****************************
  *         Data Structs      *
  ****************************/
@@ -93,7 +77,6 @@ struct TCBList{
     void Delete(TVMThreadID id);
     void Sleep(TVMTick tick);
     void DecrementSleep();
-
     //Scheduler
     void Schedule();
 };
@@ -121,10 +104,13 @@ void TCBList::Delete(TVMThreadID id){
         if (iteratedlist->DTID == id){
             DTList.erase(DTList.begin()+i);
         }
+        i++;
     }
 };
 void TCBList::Sleep(TVMTick tick){
     if (DCurrentTCB == NULL){
+        // Main has been told to go to sleep
+
         return;
     }
     DCurrentTCB->DTicks=tick;
@@ -151,30 +137,51 @@ void TCBList::Schedule(){
     }
     else {
         //get the idle thread
-        ;
+        // foundtcb = IDLE_TCB;
+        
     }
     MachineContextSwitch(&(DCurrentTCB->DContext),&(foundtcb->DContext));
 
 };
 void TCBList::DecrementSleep(){
+    int i = 0;
     for (auto iteratedlist: DSleepingList){
         if (iteratedlist->DTicks == 1){
             iteratedlist->DTicks = 0;
+            DSleepingList.erase(DSleepingList.begin()+i);
             //remove it from the sleeping list
             
         }
         else {
             iteratedlist->DTicks --;
         }
+        i++;
     }
-}
+};
 /*****************************
  *  Any global vars are here *
  * **************************/
 
 TCBList GLOBAL_TCB_LIST = TCBList();
 int GLOBAL_TICK = 0;
-TVMThreadID MAIN_ID;
+// TVMThreadID IDLE_ID;
+
+/*****************************
+ * Our definitions are here  *
+ *     Callback Functions    *
+ * **************************/
+void AlarmCallback(void *calldata){
+    GLOBAL_TCB_LIST.DecrementSleep();
+    VMPrint("Alarm called \n");
+    GLOBAL_TCB_LIST.Schedule();
+};
+void MachineCallback(void *calldata, int result){
+
+};
+void IdleCallback(){
+    //Schedule
+};
+              
 /*****************************
  * The required code is here *
  * **************************/
@@ -189,12 +196,12 @@ extern "C" {
 
 TVMStatus VMStart(int tickms, int argc, char *argv[]){
     MachineInitialize();
-    MachineRequestAlarm(1000 * tickms, AlarmCallback, NULL);
-    VMThreadCreate(AlarmCallback, NULL, 0x100000, VM_THREAD_PRIORITY_NORMAL, &MAIN_ID); //MAIN_ID -> 0
-    GLOBAL_TCB_LIST.DCurrentTCB = GLOBAL_TCB_LIST.FindTCB(MAIN_ID);
-    TVMMainEntry entry = VMLoadModule(argv[0]);
     MachineEnableSignals();
+    MachineRequestAlarm(1000 * tickms, AlarmCallback, NULL);
+    // GLOBAL_TCB_LIST.DCurrentTCB = GLOBAL_TCB_LIST.FindTCB(IDLE_ID);
+    TVMMainEntry entry = VMLoadModule(argv[0]);
     entry(argc, argv);
+    VMUnloadModule();
     return VM_STATUS_SUCCESS;
 };
 
