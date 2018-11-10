@@ -87,7 +87,7 @@ struct TCBList{
     void Sleep(TVMTick tick);
     void DecrementSleep();
     //Scheduler
-    void Schedule(); //Should this be a member fn?
+    void Schedule(); 
 };
 TCBList GLOBAL_TCB_LIST = TCBList();
 
