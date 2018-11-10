@@ -221,7 +221,7 @@ TVMStatus VMTickCount(TVMTickRef tickref){
 TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
-    GLOBAL_TCB_LIST.DTList.emplace_back(new TCB(entry, param, memsize, prio)); //Add it on the heap
+    GLOBAL_TCB_LIST.DTList.__emplace_back(new TCB(entry, param, memsize, prio)); //Add it on the heap
     *tid = TCB::DTIDCounter;
     MachineResumeSignals(&localsigs);
 };
