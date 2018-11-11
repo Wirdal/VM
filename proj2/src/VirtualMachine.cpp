@@ -277,7 +277,7 @@ void Skeleton(void* param){ //The skeleton is just the entry fn you give to the 
  * **************************/
 void AlarmCallback(void *calldata){
     //MachineEnableSignals();
-    VMPrint("Alarm Callback \n");
+    //VMPrint("Alarm Callback \n");
     GLOBAL_TICK--;
     GLOBAL_TCB_LIST.DecrementSleep();
     GLOBAL_TCB_LIST.DCurrentTCB->DTicks = GLOBAL_TCB_LIST.DCurrentTCB->DTicks - 1;
@@ -289,7 +289,7 @@ void MachineCallback(void *calldata, int result){
     //MachineEnableSignals();
     mCallbackTick++;
     while(mCallbackTick>5){
-        VMPrint(".\n");
+        //VMPrint(".\n");
         mCallbackTick = mCallbackTick - 5;
     }
     
