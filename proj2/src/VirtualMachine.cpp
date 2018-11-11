@@ -122,7 +122,7 @@ void TCBList::Sleep(TVMTick tick){
     if (DCurrentTCB == NULL){
         // Main has been told to go to sleep
         GLOBAL_TICK = tick;
-        while (GLOBAL_TICK != 0);
+        while (GLOBAL_TICK > 0);
         VMPrint("Main Sleeping\n");
         return;
     }
@@ -259,16 +259,16 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     
     
     //create main thread
-    //VMThreadCreate(NULL, NULL, 0x100000, ((TVMThreadPriority)0x00), &MAIN_ID); //ID should be 2
+    VMThreadCreate(NULL, NULL, 0x100000, ((TVMThreadPriority)0x00), &MAIN_ID); //ID should be 2
     
     //create idle thread
-    //VMThreadCreate(IdleCallback, NULL, 0x100000, ((TVMThreadPriority)0x00), &IDLE_ID); //ID should be 1
+    VMThreadCreate(IdleCallback, NULL, 0x100000, ((TVMThreadPriority)0x00), &IDLE_ID); //ID should be 1
 
     
     //set current thread to main
     //GLOBAL_TCB_LIST.DCurrentTCB = GLOBAL_TCB_LIST.FindTCB(MAIN_ID);
-    //std::cout << "Main" << " | TCB ID: " << GLOBAL_TCB_LIST.FindTCB(MAIN_ID)->DTID << "|" <<GLOBAL_TCB_LIST.DCurrentTCB->DTID << "\n"; //should be 1
-    //std::cout << "IDLE" << " | TCB ID: " << GLOBAL_TCB_LIST.FindTCB(IDLE_ID)->DTID << "\n"; //should be 1
+    std::cout << "Main" << " | TCB ID: " << GLOBAL_TCB_LIST.FindTCB(MAIN_ID)->DTID << "|" <<GLOBAL_TCB_LIST.DCurrentTCB->DTID << "\n"; //should be 1
+    std::cout << "IDLE" << " | TCB ID: " << GLOBAL_TCB_LIST.FindTCB(IDLE_ID)->DTID << "\n"; //should be 1
     
     TVMMainEntry entry = VMLoadModule(argv[0]);
     entry(argc, argv);
@@ -290,12 +290,12 @@ TVMStatus VMTickCount(TVMTickRef tickref){
 }
 
 TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
-//    TMachineSignalState localsigs;
-//    MachineSuspendSignals(&localsigs);
-//    GLOBAL_TCB_LIST.DTList.__emplace_back(new TCB(entry, param, memsize, prio)); //Add it on the heap
-//    MachineContextCreate(&(GLOBAL_TCB_LIST.FindTCB(*tid)->DContext), Skeleton, NULL, GLOBAL_TCB_LIST.FindTCB(*tid)->DStack, 0x100000); //idle just runs NULL
-//    *tid = TCB::DTIDCounter;
-//    MachineResumeSignals(&localsigs);
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
+    GLOBAL_TCB_LIST.DTList.__emplace_back(new TCB(entry, param, memsize, prio)); //Add it on the heap
+    MachineContextCreate(&(GLOBAL_TCB_LIST.FindTCB(*tid)->DContext), Skeleton, NULL, GLOBAL_TCB_LIST.FindTCB(*tid)->DStack, 0x100000); //idle just runs NULL
+    *tid = TCB::DTIDCounter;
+    MachineResumeSignals(&localsigs);
 }
 
 TVMStatus VMThreadDelete(TVMThreadID thread){
