@@ -452,5 +452,31 @@ TVMStatus VMFileSeek(int filedescriptor, int offset, int whence, int *newoffset)
 
 }
 
+
+/*****************************
+ *         Mutex      *
+ ****************************/
+
+/* proj3
+TVMStatus VMMutexCreate(TVMutexIDRef mutexref){
+    
+}
+TVMStatus VMMutexDelete(TVMutexID mutexref){
+    
+}
+
+TVMStatus VMMutexQuery(TVMMutexID mutex, TVMutexIDRef mutexref){
+    
+}
+TVMStatus VMMutexAcquire(TVMutexID mutexref, TVMTick timeout){
+    
+}
+TVMStatus VMMutexRelease(TVMutexID mutexref){
+    
+}
+
+*/
+
+
 #define VMPrint(format, ...)        VMFilePrint ( 1,  format, ##__VA_ARGS__)
 #define VMPrintError(format, ...)   VMFilePrint ( 2,  format, ##__VA_ARGS__)
