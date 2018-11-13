@@ -253,6 +253,44 @@ void TCBList::DecrementSleep(){
     }
 }
 
+struct Mutex{
+    // Needed for thread create
+    TVMThreadIDRef DMOwner;
+    TVMMutexIDRef DMIDRef;
+    
+
+    
+    
+    // Constructor
+    Mutex(TVMThreadIDRef thread, TVMMutexIDRef mutex);
+
+};
+
+Mutex::Mutex(TVMThreadIDRef thread, TVMMutexIDRef mutex){
+    DMOwner = thread;
+    DMIDRef = mutex;
+
+}
+struct MutexList{
+    // Current Mutex
+    Mutex* DCurrentMutex;
+    
+    // Containers
+    std::vector<Mutex*> DMList;
+    // Ready lists
+    std::queue<TCB*> DMHighPrio;
+    std::queue<TCB*> DMMedPrio;
+    std::queue<TCB*> DMLowPrio;
+    
+    
+    //Functions
+    
+    //Scheduler
+    //void Schedule();
+};
+
+MutexList GLOBAL_MUTEX_LIST = MutexList();
+
 void Skeleton(void* param){ //The skeleton is just the entry fn you give to the thread.  Can be any function switching to with MCC
     MachineEnableSignals();
     GLOBAL_TCB_LIST.DCurrentTCB->DEntry(param);
@@ -458,22 +496,60 @@ TVMStatus VMFileSeek(int filedescriptor, int offset, int whence, int *newoffset)
  ****************************/
 
 
-TVMStatus VMMutexCreate(TVMMutexIDRef mutexref){
+TVMStatus VMMutexCreate(TVMMutexIDRef mutex){
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
     
+    GLOBAL_MUTEX_LIST.DMList.__emplace_back(new Mutex(0, mutex)); //not sure about thread owner arg, need to test
+    
+    MachineResumeSignals(&localsigs);
+    return VM_STATUS_SUCCESS;
+
 }
-TVMStatus VMMutexDelete(TVMMutexID mutexref){
+TVMStatus VMMutexDelete(TVMMutexID mutex){
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
     
+    GLOBAL_MUTEX_LIST.DMList[mutex] = NULL;
+    
+    MachineResumeSignals(&localsigs);
+    return VM_STATUS_SUCCESS;
 }
 
-TVMStatus VMMutexQuery(TVMMutexID mutex, TVMMutexIDRef mutexref){
+TVMStatus VMMutexQuery(TVMMutexID mutex, TVMThreadIDRef ownerref){
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
     
+    *ownerref = *GLOBAL_MUTEX_LIST.DMList[mutex]->DMOwner;
+    
+    MachineResumeSignals(&localsigs);
+    return VM_STATUS_SUCCESS;
 }
 TVMStatus VMMutexAcquire(TVMMutexID mutexref, TVMTick timeout){
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
     
+    //Match mutex priority Q with current thread priority Q
+    //sleep for specified time
+    VMThreadSleep(timeout);
+    
+    
+    
+    MachineResumeSignals(&localsigs);
+    return VM_STATUS_SUCCESS;
 }
 TVMStatus VMMutexRelease(TVMMutexID mutexref){
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
     
+    //check each Mutex priority Qs, if empty then release them
+    
+    
+    
+    MachineResumeSignals(&localsigs);
+    return VM_STATUS_SUCCESS;
 }
+
 
 
 
