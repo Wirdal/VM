@@ -307,10 +307,10 @@ TVMStatus VMThreadActivate(TVMThreadID thread);
 TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid);
 
 
-TVMStatus VMStart(int tickms, int argc, char *argv[]){
+TVMStatus VMStart(int tickms, TVMMemorySize heapsize, TVMMemorySize sharedsize, int argc, char *argv[]){
     //these must be before request alarm and enable si
     
-    MachineInitialize();
+    MachineInitialize(sharedsize);
     
     MachineRequestAlarm(1000 * tickms, AlarmCallback, NULL);
     MachineEnableSignals();
@@ -456,25 +456,26 @@ TVMStatus VMFileSeek(int filedescriptor, int offset, int whence, int *newoffset)
 /*****************************
  *         Mutex      *
  ****************************/
-/* proj3
-TVMStatus VMMutexCreate(TVMutexIDRef mutexref){
+
+
+TVMStatus VMMutexCreate(TVMMutexIDRef mutexref){
     
 }
-TVMStatus VMMutexDelete(TVMutexID mutexref){
+TVMStatus VMMutexDelete(TVMMutexID mutexref){
     
 }
 
-TVMStatus VMMutexQuery(TVMMutexID mutex, TVMutexIDRef mutexref){
+TVMStatus VMMutexQuery(TVMMutexID mutex, TVMMutexIDRef mutexref){
     
 }
-TVMStatus VMMutexAcquire(TVMutexID mutexref, TVMTick timeout){
+TVMStatus VMMutexAcquire(TVMMutexID mutexref, TVMTick timeout){
     
 }
-TVMStatus VMMutexRelease(TVMutexID mutexref){
+TVMStatus VMMutexRelease(TVMMutexID mutexref){
     
 }
 
-*/
+
 
 
 #define VMPrint(format, ...)        VMFilePrint ( 1,  format, ##__VA_ARGS__)
