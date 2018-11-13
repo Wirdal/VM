@@ -369,13 +369,13 @@ TVMStatus VMThreadActivate(TVMThreadID thread){
     return VM_STATUS_SUCCESS;
 }
 TVMStatus VMThreadTerminate(TVMThreadID thread){
-//    TMachineSignalState localsigs;
-//    MachineSuspendSignals(&localsigs);
-//    TCB* foundtcb = GLOBAL_TCB_LIST.FindTCB(thread);
-//    foundtcb->DState=VM_THREAD_STATE_DEAD;
-//    // Remove from ready
-//    // Call schedular
-//    MachineResumeSignals(&localsigs);
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
+    TCB* foundtcb = GLOBAL_TCB_LIST.FindTCB(thread);
+    foundtcb->DState=VM_THREAD_STATE_DEAD;
+    // Remove from ready
+    // Call schedular
+    MachineResumeSignals(&localsigs);
 }
 
 TVMStatus VMThreadID(TVMThreadIDRef threadref){
@@ -410,23 +410,45 @@ TVMStatus VMThreadSleep(TVMTick tick){
 
 TVMStatus VMFileOpen(const char *filename, int flags, int mode, int *filedescriptor){
     //VMPrint("VMFileOpen Called\n");
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
+    MachineFileOpen(filename, flags, mode, MachineCallback, &GLOBAL_TCB_LIST.DCurrentTCB);
+    MachineResumeSignals(&localsigs);
+    return VM_STATUS_SUCCESS;
 }
 TVMStatus VMFileClose(int filedescriptor){
     //VMPrint("VMFileClosed Called\n");
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
+    MachineFileClose(filedescriptor, MachineCallback, &GLOBAL_TCB_LIST.DCurrentTCB); //last argument is the thread its writing to.
+    MachineResumeSignals(&localsigs);
+    return VM_STATUS_SUCCESS;
+
 }
 TVMStatus VMFileRead(int filedescriptor, void *data, int *length){
     //VMPrint("VMFileRead Called\n");
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
+    MachineFileRead(filedescriptor, data, *length, MachineCallback, &GLOBAL_TCB_LIST.DCurrentTCB); //last argument is the thread its writing to.
+    MachineResumeSignals(&localsigs);
+    return VM_STATUS_SUCCESS;
 }
 TVMStatus VMFileWrite(int filedescriptor, void *data, int *length){
     //VMPrint("VMFileWrite Called\n");
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
-    MachineFileWrite(filedescriptor, data, *length, MachineCallback, NULL); //last argument is the thread its writing to.
+    MachineFileWrite(filedescriptor, data, *length, MachineCallback, &GLOBAL_TCB_LIST.DCurrentTCB); //last argument is the thread its writing to.
     //GLOBAL_TCB_LIST.Schedule();
     MachineResumeSignals(&localsigs);
+    return VM_STATUS_SUCCESS;
 }
 TVMStatus VMFileSeek(int filedescriptor, int offset, int whence, int *newoffset){
     //VMPrint("VMFileSeek Called\n");
+    TMachineSignalState localsigs;
+    MachineSuspendSignals(&localsigs);
+    MachineFileSeek(filedescriptor, offset, whence, MachineCallback, &GLOBAL_TCB_LIST.DCurrentTCB);
+    MachineResumeSignals(&localsigs);
+    return VM_STATUS_SUCCESS;
 
 }
 
