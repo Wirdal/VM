@@ -36,6 +36,8 @@ struct TCB{
     int DFd;
     TVMThreadState DState;
     SMachineContext DContext;
+    std::vector<TVMMutexID> DOwnedMutex;
+    Mutex* DWaitedMutex; //Mutex the thread is waiting for
 
 
     // Constructor
@@ -106,7 +108,9 @@ TCB* TCBList::FindTCB(TVMThreadID id){
 void TCBList::AddToReady(TCB* tcb){
     switch (tcb->DState){
         case VM_THREAD_PRIORITY_LOW: DLowPrio.push(tcb);
+            break;
         case VM_THREAD_PRIORITY_NORMAL: DMedPrio.push(tcb);
+            break;
         default: DHighPrio.push(tcb);
     }
 }
@@ -122,7 +126,7 @@ void TCBList::Delete(TVMThreadID id){
 }
 
 void TCBList::ThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
-    GLOBAL_TCB_LIST.DTList.__emplace_back(new TCB(entry, param, memsize, prio)); //Add it on the heap
+    GLOBAL_TCB_LIST.DTList.emplace_back(new TCB(entry, param, memsize, prio)); //Add it on the heap
 }
 
 void TCBList::Sleep(TVMTick tick){
@@ -228,11 +232,8 @@ void TCBList::Schedule(){
         foundtcb = FindTCB(DLowPrio.front()->DTID);
         DLowPrio.pop();
     }
-    else{
-        //VMPrint("Nothing found, push current thread\n");
-        GLOBAL_TCB_LIST.AddToReady(GLOBAL_TCB_LIST.DCurrentTCB);
-        //get the idle thread
-        // foundtcb = IDLE_TCB;
+    else if(DCurrentTCB->DState == VM_THREAD_STATE_WAITING){
+        // Idle thread 
     }
 }
 void TCBList::DecrementSleep(){
@@ -256,17 +257,49 @@ void TCBList::DecrementSleep(){
 struct Mutex{
     // Needed for thread create
     TVMThreadIDRef DMOwner;
-    TVMMutexIDRef DMIDRef;
-    
+    static TVMMutexID DTIDCounter;
+    TVMMutexID DTID;
+    TVMThreadID DOwnerID;
+    std::queue<TCB*> DWaitList;
 
+    void Lock(){
+        //In use
+        if (DOwnerID == -1){
+            DOwnerID = GLOBAL_TCB_LIST.DCurrentTCB->DTID;
+            GLOBAL_TCB_LIST.DCurrentTCB->DOwnedMutex.push_back(DTID);
+        }
+        //Free
+        else {
+            // Block thread
+            DWaitList.push(GLOBAL_TCB_LIST.DCurrentTCB);
+            GLOBAL_TCB_LIST.DCurrentTCB->DState=VM_THREAD_STATE_WAITING;
+        }
+    }
+
+    void Unlock(){
+        if (DWaitList.front() != NULL){
+            DOwnerID = DWaitList.front()->DTID;
+            Dequeue();
+        }
+        else {
+            DOwnerID = -1;
+        }
+    }
+    void Dequeue(){
+        DWaitList.pop();
+    }
+    void IncrementID(){
+        DTIDCounter++;
+    }
     
     
     // Constructor
     Mutex(TVMThreadIDRef thread, TVMMutexIDRef mutex);
 
 };
-
+TVMMutexID Mutex::DTIDCounter;
 Mutex::Mutex(TVMThreadIDRef thread, TVMMutexIDRef mutex){
+    DOwnerID = -1; // Set for noone 
     DMOwner = thread;
     DMIDRef = mutex;
 
@@ -274,17 +307,12 @@ Mutex::Mutex(TVMThreadIDRef thread, TVMMutexIDRef mutex){
 struct MutexList{
     // Current Mutex
     Mutex* DCurrentMutex;
-    
-    // Containers
-    std::vector<Mutex*> DMList;
-    // Ready lists
-    std::queue<TCB*> DMHighPrio;
-    std::queue<TCB*> DMMedPrio;
-    std::queue<TCB*> DMLowPrio;
-    
+    std::vector<Mutex*> DMlist;
+    int DOwnterTID;
+    std::queue<TCB*> DHighPrio;
     
     //Functions
-    
+
     //Scheduler
     //void Schedule();
 };
@@ -500,7 +528,7 @@ TVMStatus VMMutexCreate(TVMMutexIDRef mutex){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
     
-    GLOBAL_MUTEX_LIST.DMList.__emplace_back(new Mutex(0, mutex)); //not sure about thread owner arg, need to test
+    GLOBAL_MUTEX_LIST.DMList.emplace_back(new Mutex(0, mutex)); //not sure about thread owner arg, need to test
     
     MachineResumeSignals(&localsigs);
     return VM_STATUS_SUCCESS;
