@@ -220,28 +220,34 @@ void TCBList::Schedule(){
     TCB* foundtcb;
     TCB* oldtcb;
     if (!GLOBAL_TCB_LIST.DHighPrio.empty()){    //http://www.cplusplus.com/reference/queue/queue/empty/
-        VMPrint("High priority found \n");
+        //VMPrint("High priority found \n");
         //CHANGE CURRENT THREAD TO READY
         if(GLOBAL_TCB_LIST.DCurrentTCB->DState == VM_THREAD_STATE_RUNNING){
-            VMPrint("Currently running, change to ready\n");
+            //VMPrint("Currently running, change to ready\n");
             GLOBAL_TCB_LIST.DCurrentTCB->DState == VM_THREAD_STATE_READY;
         }
         //PUSH CURRENT THREAD INTO THE HIGH PRIORITY QUEUE
         if(GLOBAL_TCB_LIST.DCurrentTCB->DState == VM_THREAD_STATE_READY){
-            VMPrint("Currently ready, push to high priority queue \n");
+            //VMPrint("Currently ready, push to high priority queue \n");
             GLOBAL_TCB_LIST.AddToReady(GLOBAL_TCB_LIST.DCurrentTCB);
         }
         else if(GLOBAL_TCB_LIST.DCurrentTCB->DTicks > 0 && GLOBAL_TCB_LIST.DCurrentTCB->DState == VM_THREAD_STATE_WAITING){
-            VMPrint("Ticks there, waiting\n");
+            //VMPrint("Ticks there, waiting\n");
             while (DCurrentTCB->DTicks > 0);
             //GLOBAL_TCB_LIST.DSleepingList.push_back(DCurrentTCB);
         }
+        //VMPrint("Ready to Switch\n");
         oldtcb = GLOBAL_TCB_LIST.DCurrentTCB;
-        foundtcb = GLOBAL_TCB_LIST.DHighPrio.front();
-        GLOBAL_TCB_LIST.DCurrentTCB = foundtcb;
-        GLOBAL_TCB_LIST.DHighPrio.pop();
-        VMPrint("Context Switch\n");
-        MachineContextSwitch(&(oldtcb->DContext), &(GLOBAL_TCB_LIST.DCurrentTCB->DContext));
+        if (!GLOBAL_TCB_LIST.DHighPrio.empty()){
+            foundtcb = GLOBAL_TCB_LIST.FindTCB(DHighPrio.front()->DTID);
+        }
+
+        
+        GLOBAL_TCB_LIST.DCurrentTCB = GLOBAL_TCB_LIST.FindTCB(DHighPrio.front()->DTID);
+        //VMPrint("Ready to Switch\n");
+        //GLOBAL_TCB_LIST.DHighPrio.pop();
+        //VMPrint("Context Switch\n");
+        //MachineContextSwitch(&(oldtcb->DContext), &(GLOBAL_TCB_LIST.DCurrentTCB->DContext));
     }
     
     
@@ -249,12 +255,12 @@ void TCBList::Schedule(){
     else if (!GLOBAL_TCB_LIST.DMedPrio.empty()){
         VMPrint("Med priority found \n");
         foundtcb = FindTCB(DMedPrio.front()->DTID);
-        DMedPrio.pop();
+        //DMedPrio.pop();
     }
     else if (!GLOBAL_TCB_LIST.DLowPrio.empty()){
         VMPrint("Low priority found \n");
         foundtcb = FindTCB(DLowPrio.front()->DTID);
-        DLowPrio.pop();
+        //DLowPrio.pop();
     }
     
     //idle
@@ -286,7 +292,7 @@ void TCBList::Schedule(){
         
         //switch to idle thread
         VMPrint("Context Switch to idle\n");
-        MachineContextSwitch(&(oldtcb->DContext), &(GLOBAL_TCB_LIST.DCurrentTCB->DContext));
+        //MachineContextSwitch(&(oldtcb->DContext), &(GLOBAL_TCB_LIST.DCurrentTCB->DContext));
 
     }
 }
@@ -299,8 +305,8 @@ void TCBList::DecrementSleep(){
         else {
             VMPrint("context switch from sleep\n");
             GLOBAL_TCB_LIST.AddToReady(DSleepingList[threadnum]);
-            DSleepingList.erase(DSleepingList.begin()+threadnum); //http://www.cplusplus.com/reference/vector/vector/erase/
-            GLOBAL_TCB_LIST.Schedule();
+            //DSleepingList.erase(DSleepingList.begin()+threadnum); //http://www.cplusplus.com/reference/vector/vector/erase/
+            //GLOBAL_TCB_LIST.Schedule();
             
             //remove it from the sleeping list
             
@@ -388,10 +394,17 @@ void MachineCallback(void *calldata, int result){
     //MachineEnableSignals();
     mCallbackTick++;
     while(mCallbackTick>5){
-        //VMPrint(".\n");
+        VMPrint(".\n");
         mCallbackTick = mCallbackTick - 5;
     }
-    if(GLOBAL_TCB_LIST.DCurrentTCB->DState != VM_THREAD_STATE_RUNNING){
+    TCB* callbackTCB = (TCB*)calldata;
+    callbackTCB->DState = VM_THREAD_STATE_READY;
+    //GLOBAL_TCB_LIST.AddToReady(callbackTCB);
+    callbackTCB->DFd = result;
+    
+    
+    if(GLOBAL_TCB_LIST.DCurrentTCB->DPrio < callbackTCB->DPrio){
+        VMPrint(".\n");
         GLOBAL_TCB_LIST.Schedule();
     }
     //GLOBAL_TCB_LIST.Schedule();
@@ -430,6 +443,7 @@ TVMStatus VMStart(int tickms, int argc, char *argv[]){
     MachineEnableSignals();
     
     VMThreadCreate(NULL, NULL, 0x100000, VM_THREAD_PRIORITY_HIGH, &MAIN_ID); //ID should be 2
+    GLOBAL_TCB_LIST.AddToReady(GLOBAL_TCB_LIST.FindTCB(MAIN_ID));
     
     //create idle thread
     VMThreadCreate(IdleCallback, NULL, 0x100000, ((TVMThreadPriority)0x00), &IDLE_ID); //ID should be 1
