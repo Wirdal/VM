@@ -37,7 +37,7 @@ struct TCB{
     TVMThreadState DState;
     SMachineContext DContext;
     std::vector<TVMMutexID> DOwnedMutex;
-    Mutex* DWaitedMutex; //Mutex the thread is waiting for
+    void* DWaitedMutex; //Mutex the thread is waiting for
 
 
     // Constructor
@@ -235,6 +235,9 @@ void TCBList::Schedule(){
     else if(DCurrentTCB->DState == VM_THREAD_STATE_WAITING){
         // Idle thread 
     }
+    else {
+        //Context switch 
+    }
 }
 void TCBList::DecrementSleep(){
     int i = 0;
@@ -267,12 +270,14 @@ struct Mutex{
         if (DOwnerID == -1){
             DOwnerID = GLOBAL_TCB_LIST.DCurrentTCB->DTID;
             GLOBAL_TCB_LIST.DCurrentTCB->DOwnedMutex.push_back(DTID);
+            return;
         }
         //Free
         else {
             // Block thread
             DWaitList.push(GLOBAL_TCB_LIST.DCurrentTCB);
             GLOBAL_TCB_LIST.DCurrentTCB->DState=VM_THREAD_STATE_WAITING;
+            return;
         }
     }
 
@@ -280,35 +285,33 @@ struct Mutex{
         if (DWaitList.front() != NULL){
             DOwnerID = DWaitList.front()->DTID;
             Dequeue();
+            return;
         }
         else {
             DOwnerID = -1;
+            return;
         }
     }
     void Dequeue(){
         DWaitList.pop();
+        return;
     }
     void IncrementID(){
         DTIDCounter++;
+        return;
+    } 
+    Mutex(){
+        DOwnerID = -1; // Set for noone 
+        IncrementID();
+        DTID = DTIDCounter;
     }
-    
-    
-    // Constructor
-    Mutex(TVMThreadIDRef thread, TVMMutexIDRef mutex);
-
 };
 TVMMutexID Mutex::DTIDCounter;
-Mutex::Mutex(TVMThreadIDRef thread, TVMMutexIDRef mutex){
-    DOwnerID = -1; // Set for noone 
-    DMOwner = thread;
-    DMIDRef = mutex;
 
-}
 struct MutexList{
     // Current Mutex
     Mutex* DCurrentMutex;
     std::vector<Mutex*> DMlist;
-    int DOwnterTID;
     std::queue<TCB*> DHighPrio;
     
     //Functions
@@ -400,12 +403,16 @@ TVMStatus VMTickMS(int *tickmsref){
     MachineSuspendSignals(&localsigs);
     *tickmsref = GLOBAL_TICK;
     MachineResumeSignals(&localsigs);
+    return VM_STATUS_SUCCESS;
+
 }
 TVMStatus VMTickCount(TVMTickRef tickref){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
     *tickref = GLOBAL_TICK;
     MachineResumeSignals(&localsigs);
+    return VM_STATUS_SUCCESS;
+
 }
 
 TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
@@ -416,6 +423,8 @@ TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsiz
     //MachineContextCreate(&(GLOBAL_TCB_LIST.FindTCB(*tid)->DContext), Skeleton, NULL, GLOBAL_TCB_LIST.FindTCB(*tid)->DStack, 0x100000); //idle just runs NULL
     *tid = TCB::DTIDCounter;
     MachineResumeSignals(&localsigs);
+    return VM_STATUS_SUCCESS;
+
 }
 
 TVMStatus VMThreadDelete(TVMThreadID thread){
@@ -423,6 +432,7 @@ TVMStatus VMThreadDelete(TVMThreadID thread){
     MachineSuspendSignals(&localsigs);
     GLOBAL_TCB_LIST.Delete(thread);
     MachineResumeSignals(&localsigs);
+    return VM_STATUS_SUCCESS; 
 }
 
 TVMStatus VMThreadActivate(TVMThreadID thread){
@@ -442,6 +452,8 @@ TVMStatus VMThreadTerminate(TVMThreadID thread){
     // Remove from ready
     // Call schedular
     MachineResumeSignals(&localsigs);
+    return VM_STATUS_SUCCESS;
+
 }
 
 TVMStatus VMThreadID(TVMThreadIDRef threadref){
@@ -451,6 +463,8 @@ TVMStatus VMThreadID(TVMThreadIDRef threadref){
     MachineSuspendSignals(&localsigs);
     *threadref = GLOBAL_TCB_LIST.DCurrentTCB->DTID;
     MachineResumeSignals(&localsigs);
+    return VM_STATUS_SUCCESS;
+
 }
 
 TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
@@ -462,6 +476,7 @@ TVMStatus VMThreadState(TVMThreadID thread, TVMThreadStateRef stateref){
     
     *stateref = foundtcb->DState;
     //MachineResumeSignals(&localsigs);
+    return VM_STATUS_SUCCESS;
 }
 
 TVMStatus VMThreadSleep(TVMTick tick){
@@ -471,7 +486,7 @@ TVMStatus VMThreadSleep(TVMTick tick){
     GLOBAL_TCB_LIST.Sleep(tick);
     //GLOBAL_TCB_LIST.Schedule();
     //MachineResumeSignals(&localsigs);
-
+    return VM_STATUS_SUCCESS;
 }
 
 TVMStatus VMFileOpen(const char *filename, int flags, int mode, int *filedescriptor){
@@ -528,7 +543,7 @@ TVMStatus VMMutexCreate(TVMMutexIDRef mutex){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
     
-    GLOBAL_MUTEX_LIST.DMList.emplace_back(new Mutex(0, mutex)); //not sure about thread owner arg, need to test
+    GLOBAL_MUTEX_LIST.DMlist.emplace_back(new Mutex()); // Changed the structure of it
     
     MachineResumeSignals(&localsigs);
     return VM_STATUS_SUCCESS;
@@ -538,7 +553,7 @@ TVMStatus VMMutexDelete(TVMMutexID mutex){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
     
-    GLOBAL_MUTEX_LIST.DMList[mutex] = NULL;
+    GLOBAL_MUTEX_LIST.DMlist[mutex] = NULL;
     
     MachineResumeSignals(&localsigs);
     return VM_STATUS_SUCCESS;
@@ -548,7 +563,7 @@ TVMStatus VMMutexQuery(TVMMutexID mutex, TVMThreadIDRef ownerref){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
     
-    *ownerref = *GLOBAL_MUTEX_LIST.DMList[mutex]->DMOwner;
+    *ownerref = *GLOBAL_MUTEX_LIST.DMlist[mutex]->DMOwner;
     
     MachineResumeSignals(&localsigs);
     return VM_STATUS_SUCCESS;
