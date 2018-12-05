@@ -401,6 +401,13 @@ TVMStatus VMStart(int tickms, TVMMemorySize heapsize, TVMMemorySize sharedsize, 
     // Mounting the file
     const char *dest = "/"; //Root directory
     // the shared mem is going to be our file system, we just need to add it in there
+
+    // Recall the fat layout handout
+    // I don't think we need the BPB
+    //Zero everything out
+    for(int i = 0; i<sharedsize; i = i + 4){
+        SHARED_MEM[i] = 0;
+    }
     VMFileSystemPathIsOnMount(mount, dest); //Mounting it?
     MachineInitialize(sharedsize);
     MachineRequestAlarm(1000 * tickms, AlarmCallback, NULL);
