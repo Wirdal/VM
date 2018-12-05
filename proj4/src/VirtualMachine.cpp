@@ -15,7 +15,8 @@ int GLOBAL_TICK;
 TVMThreadID IDLE_ID = 2; //DTID incremented when VMCreate called
 TVMThreadID MAIN_ID = 1;
 void Skeleton(void* param);  //needed in shedule fn
-
+TVMMemorySize * SHARED_MEM;
+TVMMemorySize * HEAP;
 /*****************************
  *         Data Structs      *
  ****************************/
@@ -395,7 +396,12 @@ extern "C" {
 
 TVMStatus VMStart(int tickms, TVMMemorySize heapsize, TVMMemorySize sharedsize, const char *mount, int argc, char *argv[]){
     //these must be before request alarm and enable si
-    
+    SHARED_MEM = new TVMMemorySize[sharedsize];
+    HEAP = new TVMMemorySize[heapsize];
+    // Mounting the file
+    const char *dest = "/"; //Root directory
+    // the shared mem is going to be our file system, we just need to add it in there
+    VMFileSystemPathIsOnMount(mount, dest); //Mounting it?
     MachineInitialize(sharedsize);
     MachineRequestAlarm(1000 * tickms, AlarmCallback, NULL);
     MachineEnableSignals();
