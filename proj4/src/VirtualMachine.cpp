@@ -151,39 +151,17 @@ void TCBList::Sleep(TVMTick tick){
 }
 
 void TCBList::ThreadActivate(TVMThreadID thread){
-
-    
-    //TO OUTPUT INFO
-//    if (foundtcb == NULL){
-//        VMPrint("/Found NULL TCB\n");
-//        //return VM_STATUS_ERROR_INVALID_ID;
-//    }
-//    else{
-//        VMPrint("/Found a TCB\n");
-//    }
-//    if (GLOBAL_TCB_LIST.DCurrentTCB == NULL){
-//        VMPrint("DCurrentTCB is NULL");
-//    }
-//    else{
-//        VMPrint("Found a DCurrentTCB");
-//    }
-//    if (foundtcb ->DState != VM_THREAD_STATE_DEAD) {
-//        VMPrint("/Found non dead thread\n");
-//        //return VM_STATUS_ERROR_INVALID_STATE;
-//    }
     VMPrint("Thread Activated \n");
     TCB* foundtcb = GLOBAL_TCB_LIST.FindTCB(thread);
-    //MachineContextCreate(&GLOBAL_TCB_LIST.FindTCB(thread)->DContext, Skeleton, GLOBAL_TCB_LIST.FindTCB(thread)->DParam, GLOBAL_TCB_LIST.FindTCB(thread)->DStack, GLOBAL_TCB_LIST.FindTCB(thread)->DMemsize);
+    MachineContextCreate(&GLOBAL_TCB_LIST.FindTCB(thread)->DContext, Skeleton, GLOBAL_TCB_LIST.FindTCB(thread)->DParam, GLOBAL_TCB_LIST.FindTCB(thread)->DStack, GLOBAL_TCB_LIST.FindTCB(thread)->DMemsize);
     
     // Check if the thread needs to yield
     if (foundtcb->DState > GLOBAL_TCB_LIST.DCurrentTCB->DState) {
         VMPrint("/Thread needs to yield\n");
         // Special scheduuling?
         // foundtcb->DEntry(foundtcb->DParam);
+        GLOBAL_TCB_LIST.AddToReady(DCurrentTCB);
         GLOBAL_TCB_LIST.DCurrentTCB = foundtcb;
-    }
-    else{
-        //VMPrint("/Thread does not need to yield\n");
     }
     
     if ((GLOBAL_TCB_LIST.DCurrentTCB->DState == VM_THREAD_STATE_RUNNING) && (GLOBAL_TCB_LIST.DCurrentTCB->DPrio < foundtcb->DPrio)){
@@ -213,89 +191,31 @@ void TCBList::Threads(){
 void TCBList::Schedule(){
     //Look into the priorities, and switch context based on the results.
     //Also set the current TCB properly
-    //Do I need to pop though?
-
-    // - This chunk gave my machine some pretty serious errors, ended up having to restart my machine to get it to work again, it was checking to see if the queue was empty by comparing it to NULL, fixed by checking if empty instead of comparing with NULL.
-    VMPrint("The Scheduler Begins \n");
     TCB* foundtcb;
-    TCB* oldtcb;
-    if (!GLOBAL_TCB_LIST.DHighPrio.empty()){    //http://www.cplusplus.com/reference/queue/queue/empty/
-        //VMPrint("High priority found \n");
-        //CHANGE CURRENT THREAD TO READY
-        if(GLOBAL_TCB_LIST.DCurrentTCB->DState == VM_THREAD_STATE_RUNNING){
-            //VMPrint("Currently running, change to ready\n");
-            GLOBAL_TCB_LIST.DCurrentTCB->DState == VM_THREAD_STATE_READY;
-        }
-        //PUSH CURRENT THREAD INTO THE HIGH PRIORITY QUEUE
-        if(GLOBAL_TCB_LIST.DCurrentTCB->DState == VM_THREAD_STATE_READY){
-            //VMPrint("Currently ready, push to high priority queue \n");
-            GLOBAL_TCB_LIST.AddToReady(GLOBAL_TCB_LIST.DCurrentTCB);
-        }
-        else if(GLOBAL_TCB_LIST.DCurrentTCB->DTicks > 0 && GLOBAL_TCB_LIST.DCurrentTCB->DState == VM_THREAD_STATE_WAITING){
-            //VMPrint("Ticks there, waiting\n");
-            while (DCurrentTCB->DTicks > 0);
-            //GLOBAL_TCB_LIST.DSleepingList.push_back(DCurrentTCB);
-        }
-        //VMPrint("Ready to Switch\n");
-        oldtcb = GLOBAL_TCB_LIST.DCurrentTCB;
-        if (!GLOBAL_TCB_LIST.DHighPrio.empty()){
-            foundtcb = GLOBAL_TCB_LIST.FindTCB(DHighPrio.front()->DTID);
-        }
-
-        
-        GLOBAL_TCB_LIST.DCurrentTCB = GLOBAL_TCB_LIST.FindTCB(DHighPrio.front()->DTID);
-        //VMPrint("Ready to Switch\n");
-        //GLOBAL_TCB_LIST.DHighPrio.pop();
-        //VMPrint("Context Switch\n");
-        MachineContextSwitch(&(oldtcb->DContext), &(GLOBAL_TCB_LIST.DCurrentTCB->DContext));
+    TCB* oldtcb = GLOBAL_TCB_LIST.DCurrentTCB;
+    if (DHighPrio.front() != NULL){
+        foundtcb = FindTCB(DHighPrio.front()->DTID);
+        DHighPrio.pop();
     }
-    
-    
-    
-    else if (!GLOBAL_TCB_LIST.DMedPrio.empty()){
-        VMPrint("Med priority found \n");
+    else if (DMedPrio.front() != NULL){
         foundtcb = FindTCB(DMedPrio.front()->DTID);
-        //DMedPrio.pop();
+        DMedPrio.pop();
     }
-    else if (!GLOBAL_TCB_LIST.DLowPrio.empty()){
-        VMPrint("Low priority found \n");
+    else if (DLowPrio.front() != NULL){
         foundtcb = FindTCB(DLowPrio.front()->DTID);
-        //DLowPrio.pop();
+        DLowPrio.pop();
     }
-    
-    //idle
+    else {
+        foundtcb = NULL;
+    }
+    if (foundtcb == NULL){
+        // Continue on with the idle thread
+        MachineContextSwitch(&(oldtcb->DContext), &(GLOBAL_TCB_LIST.FindTCB(IDLE_ID)->DContext));
+    }
     else{
-        VMPrint("Nothing found, push current thread\n");
-        GLOBAL_TCB_LIST.AddToReady(GLOBAL_TCB_LIST.DCurrentTCB);
-        
-        VMPrint("idle\n");
-        //PUSH CURRENT THREAD INTO THE HIGH PRIORITY QUEUE
-        if(GLOBAL_TCB_LIST.DCurrentTCB->DState == VM_THREAD_STATE_READY){
-            VMPrint("Current is ready\n");
-            GLOBAL_TCB_LIST.AddToReady(GLOBAL_TCB_LIST.DCurrentTCB);
-        }
-        else if(GLOBAL_TCB_LIST.DCurrentTCB->DTicks > 0 && GLOBAL_TCB_LIST.DCurrentTCB->DState == VM_THREAD_STATE_WAITING){
-            VMPrint("Ticks & current is waiting\n");
-            GLOBAL_TCB_LIST.DSleepingList.push_back(DCurrentTCB);
-        }
-        else{
-            VMPrint("else\n");
-        }
-        oldtcb = GLOBAL_TCB_LIST.DCurrentTCB;
-        foundtcb = GLOBAL_TCB_LIST.DHighPrio.front();
-        //set current to idle thread
-        GLOBAL_TCB_LIST.DCurrentTCB = GLOBAL_TCB_LIST.FindTCB(IDLE_ID);
-        //set idle to running
-        GLOBAL_TCB_LIST.DCurrentTCB->DState = VM_THREAD_STATE_RUNNING;
-        //push idle thread to list of threads
-        GLOBAL_TCB_LIST.DTList.emplace_back( GLOBAL_TCB_LIST.DCurrentTCB);
-        
-        //switch to idle thread
-        VMPrint("Context Switch to idle\n");
         MachineContextSwitch(&(oldtcb->DContext), &(GLOBAL_TCB_LIST.DCurrentTCB->DContext));
-
     }
-}
+};
 void TCBList::DecrementSleep(){
     for (int threadnum = 0; threadnum < DSleepingList.size(); threadnum++){
         if (DSleepingList[threadnum]->DTicks != 0){
@@ -315,39 +235,71 @@ void TCBList::DecrementSleep(){
         
     }
 }
-/*
+
+    /*****************************
+    *      MUTEX  STRUCTURE      *
+    *****************************/
+
 struct Mutex{
     // Needed for thread create
-    TVMThreadIDRef DMOwner;
-    TVMMutexIDRef DMIDRef;
-    
-    // Constructor
-    Mutex(TVMThreadIDRef thread, TVMMutexIDRef mutex);
-    
+    static TVMMutexID DTIDCounter;
+    TVMMutexID DTID;
+    TVMThreadID DOwnerID;
+    std::queue<TCB*> DWaitList;
 
+    void Lock(){
+        //In use
+        if (DOwnerID == -1){
+            DOwnerID = GLOBAL_TCB_LIST.DCurrentTCB->DTID;
+            GLOBAL_TCB_LIST.DCurrentTCB->DOwnedMutex.push_back(DTID);
+            return;
+        }
+        //Free
+        else {
+            // Block thread
+            DWaitList.push(GLOBAL_TCB_LIST.DCurrentTCB);
+            GLOBAL_TCB_LIST.DCurrentTCB->DState=VM_THREAD_STATE_WAITING;
+            return;
+        }
+    }
+
+    void Unlock(){
+        if (DWaitList.front() != NULL){
+            DOwnerID = DWaitList.front()->DTID;
+            Dequeue();
+            return;
+        }
+        else {
+            DOwnerID = -1;
+            return;
+        }
+    }
+    void Dequeue(){
+        DWaitList.pop();
+        return;
+    }
+    void IncrementID(){
+        DTIDCounter++;
+        return;
+    } 
+    Mutex(){
+        DOwnerID = -1; // Set for noone 
+        IncrementID();
+        DTID = DTIDCounter;
+    }
 };
+TVMMutexID Mutex::DTIDCounter;
 
-Mutex::Mutex(TVMThreadIDRef thread, TVMMutexIDRef mutex){
-    DMOwner = thread;
-    DMIDRef = mutex;
-
-}
+    /*****************************
+    *    MUTEX LIST STRUCTURE    *
+    *****************************/
 struct MutexList{
     // Current Mutex
     Mutex* DCurrentMutex;
-    
-    // Containers
-    std::vector<Mutex*> DMList;
-    // Ready lists
-    std::queue<TCB*> DMHighPrio;
-    std::queue<TCB*> DMMedPrio;
-    std::queue<TCB*> DMLowPrio;
-    
+    std::vector<Mutex*> DMlist;
+    std::queue<TCB*> DHighPrio;
     
     //Functions
-    //Functions
-    void Lock(TVMMutexID mutexref, TVMTick timeout);
-    void Unlock();
 
     //Scheduler
     //void Schedule();
@@ -355,16 +307,9 @@ struct MutexList{
 
 MutexList GLOBAL_MUTEX_LIST = MutexList();
 
-void MutexList::Lock(TVMMutexID mutexref, TVMTick timeout){
-      VMPrint("Lock\n");
-    
-    //sleep for specified time
-    VMThreadSleep(timeout);
-}
-void MutexList::Unlock(){
-    VMPrint("Unlock\n");
-}
-*/
+
+
+
 void Skeleton(void* param){ //The skeleton is just the entry fn you give to the thread.  Can be any function switching to with MCC
     MachineEnableSignals();
     TCB* paramTCB;
@@ -445,8 +390,6 @@ extern "C" {
     TVMStatus VMFileSystemRelativePath(char *relpath, const char *basepath, const char *destpath);
 }
 
-TVMStatus VMThreadActivate(TVMThreadID thread);
-TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid);
 
 
 TVMStatus VMStart(int tickms, TVMMemorySize heapsize, TVMMemorySize sharedsize, const char *mount, int argc, char *argv[]){
@@ -467,8 +410,7 @@ TVMStatus VMStart(int tickms, TVMMemorySize heapsize, TVMMemorySize sharedsize, 
     MachineContextCreate(&(GLOBAL_TCB_LIST.FindTCB(IDLE_ID)->DContext), IdleCallback, NULL, GLOBAL_TCB_LIST.FindTCB(IDLE_ID)->DStack, GLOBAL_TCB_LIST.FindTCB(IDLE_ID)->DMemsize);
     
     
-    //GLOBAL_TCB_LIST.DCurrentTCB = GLOBAL_TCB_LIST.FindTCB(MAIN_ID); //This was giving me problems because it seemed to not have access to the data, not sure, reorganized it to be in Thread membmer fn, seen below
-    GLOBAL_TCB_LIST.Threads();
+    GLOBAL_TCB_LIST.DCurrentTCB = GLOBAL_TCB_LIST.FindTCB(MAIN_ID); //This was giving me problems because it seemed to not have access to the data, not sure, reorganized it to be in Thread membmer fn, seen below
 
     TVMMainEntry entry = VMLoadModule(argv[0]);
     entry(argc, argv);
@@ -605,7 +547,7 @@ TVMStatus VMFileSeek(int filedescriptor, int offset, int whence, int *newoffset)
  *         Mutex      *
  ****************************/
 
-/*
+
 TVMStatus VMMutexCreate(TVMMutexIDRef mutex){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
@@ -659,9 +601,6 @@ TVMStatus VMMutexRelease(TVMMutexID mutexref){
     MachineResumeSignals(&localsigs);
     return VM_STATUS_SUCCESS;
 }
-
-
-*/
 
 
 #define VMPrint(format, ...)        VMFilePrint ( 1,  format, ##__VA_ARGS__)
