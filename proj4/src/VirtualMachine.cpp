@@ -123,7 +123,7 @@ void TCBList::Delete(TVMThreadID id){
 }
 
 void TCBList::ThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid){
-    GLOBAL_TCB_LIST.DTList.__emplace_back(new TCB(entry, param, memsize, prio)); //Add it on the heap
+    GLOBAL_TCB_LIST.DTList.emplace_back(new TCB(entry, param, memsize, prio)); //Add it on the heap
     MachineContextCreate(&(GLOBAL_TCB_LIST.FindTCB(*tid)->DContext), Skeleton, GLOBAL_TCB_LIST.FindTCB(*tid), GLOBAL_TCB_LIST.FindTCB(*tid)->DStack, GLOBAL_TCB_LIST.FindTCB(*tid)->DMemsize);
 }
 
@@ -288,7 +288,7 @@ void TCBList::Schedule(){
         //set idle to running
         GLOBAL_TCB_LIST.DCurrentTCB->DState = VM_THREAD_STATE_RUNNING;
         //push idle thread to list of threads
-        GLOBAL_TCB_LIST.DTList.__emplace_back( GLOBAL_TCB_LIST.DCurrentTCB);
+        GLOBAL_TCB_LIST.DTList.emplace_back( GLOBAL_TCB_LIST.DCurrentTCB);
         
         //switch to idle thread
         VMPrint("Context Switch to idle\n");
@@ -381,9 +381,9 @@ void Skeleton(void* param){ //The skeleton is just the entry fn you give to the 
 void AlarmCallback(void *calldata){
     //MachineEnableSignals();
     //VMPrint("Alarm Callback \n");
-    GLOBAL_TICK--;
+    GLOBAL_TICK++; // Should be counting up
     GLOBAL_TCB_LIST.DecrementSleep();
-    GLOBAL_TCB_LIST.DCurrentTCB->DTicks = GLOBAL_TCB_LIST.DCurrentTCB->DTicks - 1;
+    // GLOBAL_TCB_LIST.DCurrentTCB->DTicks = GLOBAL_TCB_LIST.DCurrentTCB->DTicks - 1; // Already counting in the above statement
     //std::cout << "Dticks: "<<GLOBAL_TCB_LIST.DCurrentTCB->DTicks<<"\n";
     //GLOBAL_TCB_LIST.Schedule();
     
@@ -452,12 +452,13 @@ TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsiz
 TVMStatus VMStart(int tickms, TVMMemorySize heapsize, TVMMemorySize sharedsize, const char *mount, int argc, char *argv[]){
     //these must be before request alarm and enable si
     
-    MachineInitialize(); //proj2
-    //MachineInitialize(sharedsize); //proj3
+    MachineInitialize(sharedsize);
     MachineRequestAlarm(1000 * tickms, AlarmCallback, NULL);
     MachineEnableSignals();
+    //Stuff for mounting the file system.
+
     
-    VMThreadCreate(NULL, NULL, 0x100000, VM_THREAD_PRIORITY_HIGH, &MAIN_ID); //ID should be 2
+    VMThreadCreate(NULL, NULL, 0x100000, VM_THREAD_PRIORITY_HIGH, &MAIN_ID);
     GLOBAL_TCB_LIST.AddToReady(GLOBAL_TCB_LIST.FindTCB(MAIN_ID));
     
     //create idle thread
