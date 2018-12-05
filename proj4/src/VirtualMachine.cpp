@@ -428,13 +428,28 @@ extern "C" {
     TVMMainEntry VMLoadModule(const char *module);
     void VMUnloadModule(void);
     TVMStatus VMFilePrint(int filedescriptor, const char *format, ...);
+    TVMStatus VMDateTime(SVMDateTimeRef curdatetime);
+    uint32_t VMStringLength(const char *str);
+    void VMStringCopy(char *dest, const char *src);
+    void VMStringCopyN(char *dest, const char *src, int32_t n);
+    void VMStringConcatenate(char *dest, const char *src);
+    TVMStatus VMFileSystemValidPathName(const char *name);
+    TVMStatus VMFileSystemIsRelativePath(const char *name);
+    TVMStatus VMFileSystemIsAbsolutePath(const char *name);
+    TVMStatus VMFileSystemGetAbsolutePath(char *abspath, const char *curpath, const char *destpath);
+    TVMStatus VMFileSystemPathIsOnMount(const char *mntpt, const char *destpath);
+    TVMStatus VMFileSystemDirectoryFromFullPath(char *dirname, const char *path);
+    TVMStatus VMFileSystemFileFromFullPath(char *filename, const char *path);
+    TVMStatus VMFileSystemConsolidatePath(char *fullpath, const char *dirname, const char *filename);
+    TVMStatus VMFileSystemSimplifyPath(char *simpath, const char *abspath, const char *relpath);
+    TVMStatus VMFileSystemRelativePath(char *relpath, const char *basepath, const char *destpath);
 }
 
 TVMStatus VMThreadActivate(TVMThreadID thread);
 TVMStatus VMThreadCreate(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio, TVMThreadIDRef tid);
 
 
-TVMStatus VMStart(int tickms, int argc, char *argv[]){
+TVMStatus VMStart(int tickms, TVMMemorySize heapsize, TVMMemorySize sharedsize, const char *mount, int argc, char *argv[]){
     //these must be before request alarm and enable si
     
     MachineInitialize(); //proj2
