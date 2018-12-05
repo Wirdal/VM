@@ -37,7 +37,8 @@ struct TCB{
     int DFd;
     TVMThreadState DState;
     SMachineContext DContext;
-
+    std::vector<TVMMutexID> DOwnedMutex;
+    void* DWaitedMutex; //Mutex the thread is waiting for
 
     // Constructor
     TCB(TVMThreadEntry entry, void *param, TVMMemorySize memsize, TVMThreadPriority prio);
@@ -551,9 +552,13 @@ TVMStatus VMFileSeek(int filedescriptor, int offset, int whence, int *newoffset)
 TVMStatus VMMutexCreate(TVMMutexIDRef mutex){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
+    if (mutex == NULL){
+        MachineResumeSignals(&localsigs);
+        return VM_STATUS_ERROR_INVALID_PARAMETER;
+    }
     
-    GLOBAL_MUTEX_LIST.DMList.__emplace_back(new Mutex(0, mutex)); //not sure about thread owner arg, need to test
-    
+    GLOBAL_MUTEX_LIST.DMlist.emplace_back(new Mutex()); // Changed the structure of it
+    *mutex = Mutex::DTIDCounter;
     MachineResumeSignals(&localsigs);
     return VM_STATUS_SUCCESS;
 
@@ -561,8 +566,16 @@ TVMStatus VMMutexCreate(TVMMutexIDRef mutex){
 TVMStatus VMMutexDelete(TVMMutexID mutex){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
+    if (GLOBAL_MUTEX_LIST.DMlist[mutex-1]->DOwnerID != -1){
+        MachineResumeSignals(&localsigs);
+        return VM_STATUS_ERROR_INVALID_STATE;
+    }
+    if (mutex > Mutex::DTIDCounter){
+        MachineResumeSignals(&localsigs);
+        return VM_STATUS_ERROR_INVALID_ID;
+    }
     
-    GLOBAL_MUTEX_LIST.DMList[mutex] = NULL;
+    GLOBAL_MUTEX_LIST.DMlist[mutex-1] = NULL;
     
     MachineResumeSignals(&localsigs);
     return VM_STATUS_SUCCESS;
@@ -571,8 +584,15 @@ TVMStatus VMMutexDelete(TVMMutexID mutex){
 TVMStatus VMMutexQuery(TVMMutexID mutex, TVMThreadIDRef ownerref){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
-    
-    *ownerref = *GLOBAL_MUTEX_LIST.DMList[mutex]->DMOwner;
+    if (ownerref == NULL){
+        MachineResumeSignals(&localsigs);
+        return VM_STATUS_ERROR_INVALID_PARAMETER;
+    }
+    if (GLOBAL_MUTEX_LIST.DMlist[mutex-1]->DOwnerID == -1){
+        MachineResumeSignals(&localsigs);
+        return VM_THREAD_ID_INVALID;
+    }
+    *ownerref = GLOBAL_MUTEX_LIST.DMlist[mutex-1]->DOwnerID;
     
     MachineResumeSignals(&localsigs);
     return VM_STATUS_SUCCESS;
@@ -581,27 +601,34 @@ TVMStatus VMMutexAcquire(TVMMutexID mutexref, TVMTick timeout){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
     
+    if (GLOBAL_MUTEX_LIST.DMlist[mutexref-1] == NULL){
+        MachineResumeSignals(&localsigs);
+        return VM_STATUS_ERROR_INVALID_ID;
+    }
+    if ((timeout == VM_TIMEOUT_IMMEDIATE) && (GLOBAL_MUTEX_LIST.DMlist[mutexref-1]->DOwnerID != -1)){
+        MachineResumeSignals(&localsigs);
+        return VM_STATUS_FAILURE;
+    }
     //Match mutex priority Q with current thread priority Q
-    
     //sleep for specified time
-    GLOBAL_MUTEX_LIST.Lock(mutexref, timeout);
-    
-    
+    VMThreadSleep(timeout);
     MachineResumeSignals(&localsigs);
     return VM_STATUS_SUCCESS;
 }
 TVMStatus VMMutexRelease(TVMMutexID mutexref){
     TMachineSignalState localsigs;
     MachineSuspendSignals(&localsigs);
-    
     //check each Mutex priority Qs, if empty then release them
-    GLOBAL_MUTEX_LIST.Unlock();
-    
-    
+    for (int i = 0; GLOBAL_TCB_LIST.DCurrentTCB->DOwnedMutex.size(); i++){
+        if (GLOBAL_MUTEX_LIST.DMlist[GLOBAL_TCB_LIST.DCurrentTCB->DOwnedMutex[i]]->DOwnerID == mutexref){
+            GLOBAL_MUTEX_LIST.DMlist[mutexref]->DOwnerID = -1;
+            MachineResumeSignals(&localsigs);
+            return VM_STATUS_SUCCESS;
+        }
+    }
     MachineResumeSignals(&localsigs);
-    return VM_STATUS_SUCCESS;
+    return VM_STATUS_ERROR_INVALID_ID;
 }
-
 
 #define VMPrint(format, ...)        VMFilePrint ( 1,  format, ##__VA_ARGS__)
 #define VMPrintError(format, ...)   VMFilePrint ( 2,  format, ##__VA_ARGS__)
